@@ -10,7 +10,7 @@ import { LogOut, Menu, MessageCircle, X } from "lucide-react";
 import { useState } from "react";
 
 export default function Home() {
-  const { user, loading } = useAuth();
+  const { user, loading, firestoreUserId } = useAuth();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [recipientPhone, setRecipientPhone] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -37,7 +37,7 @@ export default function Home() {
     );
   }
 
-  if (!user) {
+  if (!user || !firestoreUserId) {
     return <AuthForm onAuthSuccess={() => {}} />;
   }
 
@@ -93,7 +93,7 @@ export default function Home() {
             <h2 className="text-xl font-semibold text-gray-900">Conversas</h2>
           </div>
           <ChatList
-            userId={user.uid}
+            userId={firestoreUserId}
             onSelectChat={handleSelectChat}
             selectedChatId={selectedChatId || undefined}
           />
@@ -104,7 +104,7 @@ export default function Home() {
           {selectedChatId ? (
             <ChatWindow
               chatId={selectedChatId}
-              currentUserId={user.uid}
+              currentUserId={firestoreUserId}
               recipientPhone={recipientPhone}
               onBack={() => setSelectedChatId(null)}
             />

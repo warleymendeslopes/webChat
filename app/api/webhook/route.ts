@@ -1,4 +1,4 @@
-import { createUser, getOrCreateChat, getUserByPhoneNumber, sendMessage } from '@/lib/firestore';
+import { createUser, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, sendMessage } from '@/lib/firestore';
 import { WhatsAppMessage } from '@/types';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -67,9 +67,9 @@ async function handleIncomingMessage(message: any, metadata: any) {
     return;
   }
 
-  // Create or get chat with system user (you'll need to define a system user ID)
-  const systemUserId = 'system'; // Replace with actual system user ID
-  const chatId = await getOrCreateChat([user.id, systemUserId]);
+  // Create or get chat with attendant user
+  const attendantUserId = await getOrCreateAttendant();
+  const chatId = await getOrCreateChat([user.id, attendantUserId]);
 
   // Save message to Firestore
   await sendMessage({

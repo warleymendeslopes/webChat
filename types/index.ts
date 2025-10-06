@@ -4,6 +4,7 @@ export interface User {
   phoneNumber: string;
   photoURL?: string;
   email?: string;
+  firebaseAuthUid?: string; // Link to Firebase Auth user
   createdAt: Date;
   lastSeen: Date;
   isOnline: boolean;

@@ -1,15 +1,15 @@
 import { Chat, Message, User } from '@/types';
 import {
-    addDoc,
-    collection,
-    doc,
-    getDocs,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    updateDoc,
-    where
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -44,6 +44,19 @@ export async function updateUserStatus(userId: string, isOnline: boolean) {
     isOnline,
     lastSeen: serverTimestamp(),
   });
+}
+
+export async function updateUserStatusByAuthUid(firebaseAuthUid: string, isOnline: boolean) {
+  const q = query(collection(db, 'users'), where('firebaseAuthUid', '==', firebaseAuthUid));
+  const querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    const userRef = doc(db, 'users', querySnapshot.docs[0].id);
+    await updateDoc(userRef, {
+      isOnline,
+      lastSeen: serverTimestamp(),
+    });
+  }
 }
 
 // Chats
@@ -148,6 +161,78 @@ export function subscribeToChats(userId: string, callback: (chats: Chat[]) => vo
     });
     callback(chats);
   });
+}
+
+// Get or create attendant user (for WhatsApp integration)
+export async function getOrCreateAttendant(firebaseAuthUid?: string) {
+  // Try to get from environment variable first
+  const attendantAuthUid = firebaseAuthUid || process.env.NEXT_PUBLIC_ATTENDANT_AUTH_UID;
+  
+  if (attendantAuthUid) {
+    // Check if user exists with this Firebase Auth UID
+    const q = query(collection(db, 'users'), where('firebaseAuthUid', '==', attendantAuthUid));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].id;
+    }
+  }
+  
+  // Fallback: look for a user with phoneNumber matching attendant
+  const attendantPhone = process.env.NEXT_PUBLIC_ATTENDANT_PHONE;
+  if (attendantPhone) {
+    const user = await getUserByPhoneNumber(attendantPhone);
+    if (user) {
+      return user.id;
+    }
+  }
+  
+  // Fallback: get the first user in the system (usually the logged in user)
+  const usersQuery = query(collection(db, 'users'), where('firebaseAuthUid', '!=', null));
+  const usersSnapshot = await getDocs(usersQuery);
+  
+  if (!usersSnapshot.empty) {
+    console.log(`Using first available user as attendant: ${usersSnapshot.docs[0].id}`);
+    return usersSnapshot.docs[0].id;
+  }
+  
+  // Last resort: return 'system' (for backward compatibility)
+  console.warn('No attendant user found, using "system" as fallback');
+  return 'system';
+}
+
+// Link Firebase Auth UID to Firestore user
+export async function linkFirebaseAuthToUser(firestoreUserId: string, firebaseAuthUid: string) {
+  const userRef = doc(db, 'users', firestoreUserId);
+  await updateDoc(userRef, {
+    firebaseAuthUid,
+  });
+}
+
+// Get or create user by Firebase Auth UID (for logged in users)
+export async function getOrCreateUserByAuthUid(
+  firebaseAuthUid: string,
+  userData: { name?: string; email?: string; phoneNumber?: string }
+) {
+  const q = query(collection(db, 'users'), where('firebaseAuthUid', '==', firebaseAuthUid));
+  const querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    return querySnapshot.docs[0].id;
+  }
+  
+  // Create new user
+  const userRef = await addDoc(collection(db, 'users'), {
+    firebaseAuthUid,
+    name: userData.name || userData.email || 'Atendente',
+    phoneNumber: userData.phoneNumber || '',
+    email: userData.email || '',
+    isOnline: true,
+    createdAt: serverTimestamp(),
+    lastSeen: serverTimestamp(),
+  });
+  
+  return userRef.id;
 }
 
 
