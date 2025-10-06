@@ -30,6 +30,7 @@ export interface Chat {
   lastMessageTimestamp: Date;
   unreadCount: { [userId: string]: number };
   createdAt: Date;
+  isWhatsAppChat?: boolean; // Chats do WhatsApp são visíveis para todos os atendentes
 }
 
 export interface WhatsAppMessage {

@@ -68,8 +68,9 @@ async function handleIncomingMessage(message: any, metadata: any) {
   }
 
   // Create or get chat with attendant user
+  // Mark as WhatsApp chat so ALL attendants can see it
   const attendantUserId = await getOrCreateAttendant();
-  const chatId = await getOrCreateChat([user.id, attendantUserId]);
+  const chatId = await getOrCreateChat([user.id, attendantUserId], true);
 
   // Save message to Firestore
   await sendMessage({

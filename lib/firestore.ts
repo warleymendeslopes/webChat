@@ -60,12 +60,13 @@ export async function updateUserStatusByAuthUid(firebaseAuthUid: string, isOnlin
 }
 
 // Chats
-export async function createChat(participants: string[]) {
+export async function createChat(participants: string[], isWhatsAppChat: boolean = false) {
   const chatRef = await addDoc(collection(db, 'chats'), {
     participants,
     createdAt: serverTimestamp(),
     lastMessageTimestamp: serverTimestamp(),
     unreadCount: participants.reduce((acc, id) => ({ ...acc, [id]: 0 }), {}),
+    isWhatsAppChat,
   });
   return chatRef.id;
 }
@@ -93,12 +94,12 @@ export async function findChatByParticipants(participants: string[]) {
   return null;
 }
 
-export async function getOrCreateChat(participants: string[]) {
+export async function getOrCreateChat(participants: string[], isWhatsAppChat: boolean = false) {
   const existingChat = await findChatByParticipants(participants);
   if (existingChat) {
     return existingChat.id;
   }
-  return await createChat(participants);
+  return await createChat(participants, isWhatsAppChat);
 }
 
 // Messages
@@ -143,24 +144,74 @@ export function subscribeToMessages(chatId: string, callback: (messages: Message
 }
 
 export function subscribeToChats(userId: string, callback: (chats: Chat[]) => void) {
-  const q = query(
+  // Query 1: Chats onde o usuário é participante (privados)
+  const privateChatsQuery = query(
     collection(db, 'chats'),
-    where('participants', 'array-contains', userId),
-    orderBy('lastMessageTimestamp', 'desc')
+    where('participants', 'array-contains', userId)
   );
 
-  return onSnapshot(q, (snapshot) => {
-    const chats = snapshot.docs.map((doc) => {
+  // Query 2: Chats do WhatsApp (públicos para todos atendentes)
+  const whatsappChatsQuery = query(
+    collection(db, 'chats'),
+    where('isWhatsAppChat', '==', true)
+  );
+
+  // Combine results from both queries
+  const unsubscribe1 = onSnapshot(privateChatsQuery, () => {
+    updateCombinedChats();
+  });
+
+  const unsubscribe2 = onSnapshot(whatsappChatsQuery, () => {
+    updateCombinedChats();
+  });
+
+  async function updateCombinedChats() {
+    const [privateSnapshot, whatsappSnapshot] = await Promise.all([
+      getDocs(privateChatsQuery),
+      getDocs(whatsappChatsQuery)
+    ]);
+
+    // Combine and deduplicate chats
+    const chatMap = new Map<string, Chat>();
+
+    // Add private chats
+    privateSnapshot.docs.forEach((doc) => {
       const data = doc.data();
-      return {
+      chatMap.set(doc.id, {
         id: doc.id,
         ...data,
         lastMessageTimestamp: data.lastMessageTimestamp?.toDate() || new Date(),
         createdAt: data.createdAt?.toDate() || new Date(),
-      } as Chat;
+      } as Chat);
     });
+
+    // Add WhatsApp chats (will overwrite if same ID)
+    whatsappSnapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      chatMap.set(doc.id, {
+        id: doc.id,
+        ...data,
+        lastMessageTimestamp: data.lastMessageTimestamp?.toDate() || new Date(),
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as Chat);
+    });
+
+    // Sort by last message timestamp
+    const chats = Array.from(chatMap.values()).sort(
+      (a, b) => b.lastMessageTimestamp.getTime() - a.lastMessageTimestamp.getTime()
+    );
+
     callback(chats);
-  });
+  }
+
+  // Initial load
+  updateCombinedChats();
+
+  // Return combined unsubscribe function
+  return () => {
+    unsubscribe1();
+    unsubscribe2();
+  };
 }
 
 // Get or create attendant user (for WhatsApp integration)
