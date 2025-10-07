@@ -150,6 +150,9 @@ async function handleIncomingMessage(message: any, metadata: any) {
         console.error('❌ AI gerou mensagem VAZIA! Enviando mensagem de fallback.');
         
         try {
+          // 🔧 FIX 1: Adicionar delay de 2 segundos
+          await new Promise(resolve => setTimeout(resolve, 4000));
+          
           await sendWhatsAppMessage(
             phoneNumber,
             FALLBACK_MESSAGE,
@@ -181,34 +184,54 @@ async function handleIncomingMessage(message: any, metadata: any) {
         return;
       }
 
+      // 🔧 FIX 2: Validar formato E.164 do número
+      const normalizedPhone = phoneNumber.replace(/[^\d]/g, '');
+      if (normalizedPhone.length < 10 || normalizedPhone.length > 15) {
+        console.error('❌ Número de telefone inválido:', { original: phoneNumber, normalized: normalizedPhone });
+        return;
+      }
+
       console.log('📤 Enviando para WhatsApp:', {
         to: phoneNumber,
-        message: ai.message,
+        normalizedTo: normalizedPhone,
+        message: ai.message.substring(0, 100),
+        messageLength: ai.message.length,
         phoneNumberId: companyMapping.phoneNumberId,
         tokenPresent: !!companyMapping.accessToken,
         tokenLength: companyMapping.accessToken?.length,
+        tokenPrefix: companyMapping.accessToken?.substring(0, 20) + '...',
       });
 
       try {
+        // 🔧 FIX 3: Delay de 2 segundos antes de responder (evitar race condition)
+        console.log('⏳ Aguardando 2s antes de enviar (evitar race condition)...');
+        await new Promise(resolve => setTimeout(resolve, 4000));
+        
         await sendWhatsAppMessage(
           phoneNumber,
           ai.message,
           companyMapping.phoneNumberId,
           companyMapping.accessToken
         );
-        console.log('✅ Mensagem enviada com sucesso!');
+        console.log('✅ Mensagem AI enviada com sucesso!');
       } catch (err: any) {
         const meta = {
           to: phoneNumber,
+          normalizedTo: normalizedPhone,
           phoneNumberId: companyMapping.phoneNumberId,
           status: err?.response?.status,
-          data: err?.response?.data,
+          errorData: err?.response?.data,
+          errorMessage: err?.message,
+          tokenLength: companyMapping.accessToken?.length,
         };
-        console.error('❌ AI WhatsApp send error:', meta);
+        console.error('❌ AI WhatsApp send error:', JSON.stringify(meta, null, 2));
         
         // Tentar enviar mensagem de fallback
         console.log('🔄 Tentando enviar mensagem de fallback...');
         try {
+          // Adicionar outro delay antes do fallback
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
           await sendWhatsAppMessage(
             phoneNumber,
             FALLBACK_MESSAGE,

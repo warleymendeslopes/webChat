@@ -9,7 +9,32 @@ export async function sendWhatsAppMessage(
   accessToken: string
 ) {
   try {
+    // Normalizar para formato E.164 (apenas dígitos)
     const normalizedTo = (to || '').replace(/[^\d]/g, '');
+    
+    // Validações
+    if (!normalizedTo || normalizedTo.length < 10) {
+      throw new Error(`Invalid phone number: ${to} (normalized: ${normalizedTo})`);
+    }
+    
+    if (!message || message.trim().length === 0) {
+      throw new Error('Message cannot be empty');
+    }
+    
+    if (!phoneNumberId) {
+      throw new Error('phoneNumberId is required');
+    }
+    
+    if (!accessToken || accessToken.length < 20) {
+      throw new Error('Invalid accessToken');
+    }
+    
+    console.log('📞 Sending WhatsApp message:', {
+      to: normalizedTo,
+      messagePreview: message.substring(0, 50),
+      phoneNumberId,
+    });
+    
     const response = await axios.post(
       `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
       {
@@ -33,14 +58,16 @@ export async function sendWhatsAppMessage(
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error('Error sending WhatsApp message:', {
+      console.error('❌ WhatsApp API Error:', {
         status: error.response?.status,
-        data: error.response?.data,
+        statusText: error.response?.statusText,
+        data: JSON.stringify(error.response?.data, null, 2),
         to,
         phoneNumberId,
+        url: error.config?.url,
       });
     } else {
-      console.error('Error sending WhatsApp message:', error);
+      console.error('❌ Error sending WhatsApp message:', error);
     }
     throw error;
   }
