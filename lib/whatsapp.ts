@@ -2,6 +2,39 @@ import axios from 'axios';
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0';
 
+/**
+ * Corrige números de celular brasileiros adicionando o 9º dígito quando necessário
+ * Formato: 55 + DDD (2 dígitos) + 9 + número (8 dígitos) = 13 dígitos
+ */
+function fixBrazilianPhoneNumber(phone: string): string {
+  const digitsOnly = phone.replace(/[^\d]/g, '');
+  
+  // Se não começa com 55 (Brasil), retorna como está
+  if (!digitsOnly.startsWith('55')) {
+    return digitsOnly;
+  }
+  
+  // Se já tem 13 dígitos (55 + DDD + 9 + 8), está correto
+  if (digitsOnly.length === 13) {
+    return digitsOnly;
+  }
+  
+  // Se tem 12 dígitos (55 + DDD + 8), falta o 9
+  if (digitsOnly.length === 12) {
+    const countryCode = digitsOnly.substring(0, 2); // 55
+    const ddd = digitsOnly.substring(2, 4); // 31
+    const number = digitsOnly.substring(4); // 71087005
+    
+    // Adiciona o 9 após o DDD
+    const fixed = `${countryCode}${ddd}9${number}`;
+    console.log(`📱 Corrigindo número brasileiro: ${digitsOnly} → ${fixed}`);
+    return fixed;
+  }
+  
+  // Se tem outro tamanho, retorna como está
+  return digitsOnly;
+}
+
 export async function sendWhatsAppMessage(
   to: string,
   message: string,
@@ -9,8 +42,8 @@ export async function sendWhatsAppMessage(
   accessToken: string
 ) {
   try {
-    // Normalizar para formato E.164 (apenas dígitos)
-    const normalizedTo = (to || '').replace(/[^\d]/g, '');
+    // Normalizar e corrigir formato brasileiro
+    const normalizedTo = fixBrazilianPhoneNumber(to);
     
     // Validações
     if (!normalizedTo || normalizedTo.length < 10) {
@@ -30,7 +63,8 @@ export async function sendWhatsAppMessage(
     }
     
     console.log('📞 Sending WhatsApp message:', {
-      to: normalizedTo,
+      original: to,
+      normalized: normalizedTo,
       messagePreview: message.substring(0, 50),
       phoneNumberId,
     });
@@ -82,7 +116,7 @@ export async function sendWhatsAppMedia(
   accessToken: string
 ) {
   try {
-    const normalizedTo = (to || '').replace(/[^\d]/g, '');
+    const normalizedTo = fixBrazilianPhoneNumber(to);
     const payload: any = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
