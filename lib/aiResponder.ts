@@ -1,5 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 interface QnaItem { question: string; answer: string }
 
 export async function generateSeniorSalesReply(params: {
@@ -15,10 +13,6 @@ export async function generateSeniorSalesReply(params: {
     console.log('⚠️ Nenhuma API key fornecida - agente AI não pode ser ativado');
     return null;
   }
-
-  // Inicializa o Gemini AI
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
   // Monta o prompt com contexto e QnA
   let prompt = `Você é um assistente de vendas sênior altamente experiente e profissional. Seu objetivo é ajudar clientes com informações sobre produtos, serviços, preços e condições de pagamento de forma clara, objetiva e cordial.
@@ -45,7 +39,7 @@ export async function generateSeniorSalesReply(params: {
   
   Responda como um vendedor sênior responderia:`;
 
-  console.log('🤖 Enviando requisição ao Gemini...');
+  console.log('🤖 Enviando requisição ao Gemini (v1 REST)...');
 
   // Timeout de 3 minutos (180000 ms)
   const TIMEOUT_MS = 180000;
@@ -70,18 +64,43 @@ export async function generateSeniorSalesReply(params: {
     });
   }
 
-  // Executa a geração com timeout
-  const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-  const response = await result.response;
-  const aiMessage = response.text();
+  // Chamada REST v1 do Gemini para evitar problemas de versão (v1beta 404)
+  const MODEL = 'gemini-1.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const body = {
+    contents: [
+      {
+        parts: [{ text: prompt }],
+      },
+    ],
+  } as any;
+
+  const response = await withTimeout(fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  }), TIMEOUT_MS);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const error = new Error(`Gemini HTTP ${response.status}: ${errorText}`);
+    (error as any).name = 'GeminiHttpError';
+    (error as any).code = response.status;
+    throw error;
+  }
+
+  const data = await response.json();
+  const aiMessage = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
   console.log('✅ Resposta recebida do Gemini:', {
     input: customerMessage,
-    output: aiMessage.substring(0, 150) + '...',
+    output: (aiMessage || '').substring(0, 150) + '...',
     outputLength: aiMessage?.length,
   });
 
-  // Retorna com alta confiança já que foi gerado pela IA
   return {
     message: aiMessage,
     confidence: 0.85,
