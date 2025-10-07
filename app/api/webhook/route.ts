@@ -343,6 +343,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
     }
   } catch (e: any) {
     console.error('AI auto-reply error:', e);
+    const isTimeout = e?.name === 'GeminiTimeoutError' || /timed out/i.test(e?.message || '');
     try {
       const companyMapping = phoneNumberId ? await getCompanyByPhoneNumberId(phoneNumberId) : null;
       if (companyMapping) {
@@ -351,8 +352,15 @@ async function handleIncomingMessage(message: any, metadata: any) {
           chatId,
           customerPhone: phoneNumber,
           inboundMessage: messageText,
-          action: 'skip',
-          error: e?.message || 'unknown',
+          action: 'handoff_human',
+          error: e?.message || (isTimeout ? 'gemini_timeout' : 'gemini_error'),
+          meta: {
+            reason: isTimeout ? 'gemini_timeout' : 'gemini_error',
+            name: e?.name,
+            code: e?.code,
+            status: e?.response?.status,
+            errorData: e?.response?.data,
+          },
         });
       }
     } catch {}
