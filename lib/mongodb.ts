@@ -1,33 +1,35 @@
 import { Collection, Db, MongoClient } from 'mongodb';
 
-const uri = process.env.MONGODB_URI;
-const options = {};
+let client: MongoClient | undefined;
+let clientPromise: Promise<MongoClient> | undefined;
 
-let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
+async function getClient(): Promise<MongoClient> {
+  if (client && clientPromise) return clientPromise;
 
-if (!uri) {
-  throw new Error('Please add your Mongo URI to .env.local');
-}
+  const uri = process.env.MONGODB_URI;
+  const options = {};
 
-if (process.env.NODE_ENV === 'development') {
-  // In development mode, use a global variable so that the client
-  // is not recreated on every hot-reload
-  if (!(global as any)._mongoClientPromise) {
-    client = new MongoClient(uri, options);
-    (global as any)._mongoClientPromise = client.connect();
+  if (!uri) {
+    throw new Error('MONGODB_URI is not set. Configure it in your environment variables.');
   }
-  clientPromise = (global as any)._mongoClientPromise;
-} else {
-  // In production mode, it's best to not use a global variable.
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
-}
 
-export default clientPromise;
+  if (process.env.NODE_ENV === 'development') {
+    if (!(global as any)._mongoClientPromise) {
+      client = new MongoClient(uri, options);
+      (global as any)._mongoClientPromise = client.connect();
+    }
+    clientPromise = (global as any)._mongoClientPromise as Promise<MongoClient>;
+  } else {
+    client = new MongoClient(uri, options);
+    clientPromise = client.connect();
+  }
+
+  return clientPromise;
+}
 
 export async function getCollection(collectionName: string): Promise<Collection> {
-  const client = await clientPromise;
-  const db: Db = client.db('webChat');
+  const cli = await getClient();
+  const dbName = process.env.MONGODB_DB || 'webChat';
+  const db: Db = cli.db(dbName);
   return db.collection(collectionName);
 }

@@ -131,13 +131,59 @@ async function handleIncomingMessage(message: any, metadata: any) {
       customerMessage: messageText,
     });
 
+    // 🔍 LOG DETALHADO
+    console.log('🤖 AI gerou resposta:', {
+      input: messageText,
+      output: ai.message,
+      outputLength: ai.message?.length,
+      confidence: ai.confidence,
+      action: ai.action,
+      context: aiConfig.context?.substring(0, 50) || 'EMPTY',
+      qnaCount: aiConfig.qna?.length || 0,
+    });
+
     if (ai.action === 'reply') {
-      await sendWhatsAppMessage(
-        phoneNumber,
-        ai.message,
-        companyMapping.phoneNumberId,
-        companyMapping.accessToken
-      );
+      // Validação antes de enviar
+      if (!ai.message || ai.message.trim().length === 0) {
+        console.error('❌ AI gerou mensagem VAZIA! Abortando.');
+        return;
+      }
+
+      console.log('📤 Enviando para WhatsApp:', {
+        to: phoneNumber,
+        message: ai.message,
+        phoneNumberId: companyMapping.phoneNumberId,
+        tokenPresent: !!companyMapping.accessToken,
+        tokenLength: companyMapping.accessToken?.length,
+      });
+
+      try {
+        await sendWhatsAppMessage(
+          phoneNumber,
+          ai.message,
+          companyMapping.phoneNumberId,
+          companyMapping.accessToken
+        );
+        console.log('✅ Mensagem enviada com sucesso!');
+      } catch (err: any) {
+        const meta = {
+          to: phoneNumber,
+          phoneNumberId: companyMapping.phoneNumberId,
+          status: err?.response?.status,
+          data: err?.response?.data,
+        };
+        console.error('AI WhatsApp send error:', meta);
+        await writeAiLog({
+          companyId: companyMapping.companyId,
+          chatId,
+          customerPhone: phoneNumber,
+          inboundMessage: messageText,
+          action: 'skip',
+          error: err?.message || 'whatsapp_send_error',
+          meta,
+        });
+        return; // stop further processing on send failure
+      }
 
       await sendMessage({
         chatId,

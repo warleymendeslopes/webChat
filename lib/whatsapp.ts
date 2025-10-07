@@ -9,12 +9,13 @@ export async function sendWhatsAppMessage(
   accessToken: string
 ) {
   try {
+    const normalizedTo = (to || '').replace(/[^\d]/g, '');
     const response = await axios.post(
       `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
       {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
-        to: to,
+        to: normalizedTo,
         type: 'text',
         text: {
           preview_url: false,
@@ -31,7 +32,16 @@ export async function sendWhatsAppMessage(
 
     return response.data;
   } catch (error) {
-    console.error('Error sending WhatsApp message:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Error sending WhatsApp message:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        to,
+        phoneNumberId,
+      });
+    } else {
+      console.error('Error sending WhatsApp message:', error);
+    }
     throw error;
   }
 }
@@ -45,10 +55,11 @@ export async function sendWhatsAppMedia(
   accessToken: string
 ) {
   try {
+    const normalizedTo = (to || '').replace(/[^\d]/g, '');
     const payload: any = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to: to,
+      to: normalizedTo,
       type: mediaType,
     };
 
@@ -73,7 +84,16 @@ export async function sendWhatsAppMedia(
 
     return response.data;
   } catch (error) {
-    console.error('Error sending WhatsApp media:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Error sending WhatsApp media:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        to,
+        phoneNumberId,
+      });
+    } else {
+      console.error('Error sending WhatsApp media:', error);
+    }
     throw error;
   }
 }
