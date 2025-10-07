@@ -1,6 +1,6 @@
 import { writeAiLog } from '@/lib/aiLog';
 import { generateSeniorSalesReply } from '@/lib/aiResponder';
-import { createUser, getMessagesSince, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage } from '@/lib/firestore';
+import { createUser, getMessagesSince, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage, setChatAiControl } from '@/lib/firestore';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { getAiConfig, getCompanyByPhoneNumberId } from '@/lib/whatsappConfig';
 import { WhatsAppMessage } from '@/types';
@@ -344,6 +344,8 @@ async function handleIncomingMessage(message: any, metadata: any) {
         action: 'reply',
       });
 
+      await setChatAiControl(chatId, true);
+
       console.log('AI auto-reply sent');
     } else {
       await writeAiLog({
@@ -355,6 +357,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
         action: 'handoff_human',
         meta: { note: 'confidence below threshold' },
       });
+      await setChatAiControl(chatId, false);
     }
   } catch (e: any) {
     console.error('AI auto-reply error:', e);
@@ -377,6 +380,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
             errorData: e?.response?.data,
           },
         });
+        await setChatAiControl(chatId, false);
       }
     } catch {}
   }

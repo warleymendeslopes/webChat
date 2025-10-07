@@ -1,6 +1,10 @@
 "use client";
 
-import { subscribeToMessages } from "@/lib/firestore";
+import {
+  setChatAiControl,
+  subscribeToChat,
+  subscribeToMessages,
+} from "@/lib/firestore";
 import { Message } from "@/types";
 import { ArrowLeft, MoreVertical, Phone, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -24,6 +28,7 @@ export default function ChatWindow({
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aiControl, setAiControl] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef<number>(0);
 
@@ -54,7 +59,14 @@ export default function ChatWindow({
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubscribeChat = subscribeToChat(chatId, (chat) => {
+      setAiControl(Boolean((chat as any)?.aiControl));
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeChat();
+    };
   }, [chatId]);
 
   useEffect(() => {
@@ -73,7 +85,8 @@ export default function ChatWindow({
 
     if (currentCount > previousCount) {
       const lastMessage = messages[currentCount - 1];
-      if (lastMessage && lastMessage.senderId !== currentUserId) {
+      // Beep apenas quando chegar mensagem do cliente (WhatsApp)
+      if (lastMessage && lastMessage.isFromWhatsApp) {
         playBeep();
       }
     }
@@ -81,6 +94,15 @@ export default function ChatWindow({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleDisableAi = async () => {
+    try {
+      await setChatAiControl(chatId, false);
+    } catch (e) {
+      console.error("Falha ao desativar IA:", e);
+      alert("Falha ao desativar IA");
+    }
   };
 
   return (
@@ -103,7 +125,9 @@ export default function ChatWindow({
           </div>
           <div>
             <h2 className="font-semibold text-gray-900">{recipientPhone}</h2>
-            <p className="text-xs text-gray-500">Online</p>
+            <p className="text-xs text-gray-500">
+              {aiControl ? "IA no controle" : "Atendente"}
+            </p>
           </div>
         </div>
         <div className="flex items-center space-x-4">
@@ -113,6 +137,14 @@ export default function ChatWindow({
           <button className="text-gray-600 hover:text-gray-900">
             <Phone size={22} />
           </button>
+          {aiControl && (
+            <button
+              onClick={handleDisableAi}
+              className="px-3 py-1 rounded bg-red-600 text-white text-sm hover:bg-red-700"
+            >
+              Desativar IA
+            </button>
+          )}
           <button className="text-gray-600 hover:text-gray-900">
             <MoreVertical size={22} />
           </button>
@@ -131,7 +163,8 @@ export default function ChatWindow({
               <MessageBubble
                 key={message.id}
                 message={message}
-                isOwn={message.senderId === currentUserId}
+                // Alinhar à direita quando NÃO for do WhatsApp (ou seja, atendente/IA)
+                isOwn={!message.isFromWhatsApp}
               />
             ))}
             <div ref={messagesEndRef} />
@@ -145,6 +178,7 @@ export default function ChatWindow({
         senderId={currentUserId}
         recipientPhone={recipientPhone}
         companyId={companyId}
+        disabled={aiControl}
       />
     </div>
   );

@@ -416,4 +416,28 @@ export async function getChatRecipientPhone(chatId: string, currentUserId: strin
   return normalizeBrazilianPhone(rawPhone);
 }
 
+export function subscribeToChat(chatId: string, callback: (chat: Chat | null) => void) {
+  const q = query(collection(db, 'chats'), where('__name__', '==', chatId));
+  return onSnapshot(q, (snapshot) => {
+    if (snapshot.empty) {
+      callback(null);
+      return;
+    }
+    const docSnap = snapshot.docs[0];
+    const data: any = docSnap.data();
+    const chat: Chat = {
+      id: docSnap.id,
+      ...data,
+      lastMessageTimestamp: data.lastMessageTimestamp?.toDate() || new Date(),
+      createdAt: data.createdAt?.toDate() || new Date(),
+    } as Chat;
+    callback(chat);
+  });
+}
+
+export async function setChatAiControl(chatId: string, inControl: boolean) {
+  const chatRef = doc(db, 'chats', chatId);
+  await updateDoc(chatRef, { aiControl: inControl });
+}
+
 

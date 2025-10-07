@@ -8,6 +8,7 @@ interface MessageInputProps {
   senderId: string;
   recipientPhone: string;
   companyId: string;
+  disabled?: boolean;
 }
 
 export default function MessageInput({
@@ -15,13 +16,14 @@ export default function MessageInput({
   senderId,
   recipientPhone,
   companyId,
+  disabled = false,
 }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSendMessage = async () => {
-    if (!message.trim() || isSending) return;
+    if (!message.trim() || isSending || disabled) return;
 
     setIsSending(true);
     try {
@@ -62,7 +64,7 @@ export default function MessageInput({
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || disabled) return;
 
     setIsSending(true);
     try {
@@ -118,11 +120,16 @@ export default function MessageInput({
   };
 
   return (
-    <div className="bg-gray-100 border-t border-gray-300 px-4 py-3">
+    <div
+      className={`bg-gray-100 border-t border-gray-300 px-4 py-3 ${
+        disabled ? "opacity-60" : ""
+      }`}
+    >
       <div className="flex items-center space-x-2">
         <button
-          onClick={() => fileInputRef.current?.click()}
-          className="text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-200"
+          onClick={() => !disabled && fileInputRef.current?.click()}
+          disabled={disabled}
+          className="text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Paperclip size={22} />
         </button>
@@ -140,11 +147,16 @@ export default function MessageInput({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Digite uma mensagem"
-            disabled={isSending}
+            placeholder={
+              disabled ? "IA no controle desta conversa" : "Digite uma mensagem"
+            }
+            disabled={isSending || disabled}
             className="w-full px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:border-green-500 pr-10 text-gray-900 placeholder:text-gray-400"
           />
-          <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900">
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900"
+            disabled={disabled}
+          >
             <Smile size={20} />
           </button>
         </div>
@@ -152,13 +164,16 @@ export default function MessageInput({
         {message.trim() ? (
           <button
             onClick={handleSendMessage}
-            disabled={isSending}
+            disabled={isSending || disabled}
             className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={22} />
           </button>
         ) : (
-          <button className="text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-200">
+          <button
+            className="text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-200"
+            disabled={disabled}
+          >
             <Mic size={22} />
           </button>
         )}
