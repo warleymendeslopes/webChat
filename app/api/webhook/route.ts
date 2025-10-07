@@ -143,9 +143,41 @@ async function handleIncomingMessage(message: any, metadata: any) {
     });
 
     if (ai.action === 'reply') {
+      const FALLBACK_MESSAGE = 'Olá! Nosso atendente virtual está temporariamente indisponível. Seu atendimento está na fila e você será atendido em breve por um de nossos especialistas. Obrigado pela compreensão! 😊';
+      
       // Validação antes de enviar
       if (!ai.message || ai.message.trim().length === 0) {
-        console.error('❌ AI gerou mensagem VAZIA! Abortando.');
+        console.error('❌ AI gerou mensagem VAZIA! Enviando mensagem de fallback.');
+        
+        try {
+          await sendWhatsAppMessage(
+            phoneNumber,
+            FALLBACK_MESSAGE,
+            companyMapping.phoneNumberId,
+            companyMapping.accessToken
+          );
+          
+          await sendMessage({
+            chatId,
+            senderId: attendantUserId,
+            text: FALLBACK_MESSAGE,
+            status: 'sent',
+            isFromWhatsApp: false,
+          });
+          
+          await writeAiLog({
+            companyId: companyMapping.companyId,
+            chatId,
+            customerPhone: phoneNumber,
+            inboundMessage: messageText,
+            action: 'skip',
+            error: 'empty_ai_message_fallback_sent',
+          });
+          
+          console.log('✅ Mensagem de fallback enviada (AI vazia)');
+        } catch (fallbackErr: any) {
+          console.error('❌ Erro ao enviar mensagem de fallback:', fallbackErr);
+        }
         return;
       }
 
@@ -172,17 +204,54 @@ async function handleIncomingMessage(message: any, metadata: any) {
           status: err?.response?.status,
           data: err?.response?.data,
         };
-        console.error('AI WhatsApp send error:', meta);
-        await writeAiLog({
-          companyId: companyMapping.companyId,
-          chatId,
-          customerPhone: phoneNumber,
-          inboundMessage: messageText,
-          action: 'skip',
-          error: err?.message || 'whatsapp_send_error',
-          meta,
-        });
-        return; // stop further processing on send failure
+        console.error('❌ AI WhatsApp send error:', meta);
+        
+        // Tentar enviar mensagem de fallback
+        console.log('🔄 Tentando enviar mensagem de fallback...');
+        try {
+          await sendWhatsAppMessage(
+            phoneNumber,
+            FALLBACK_MESSAGE,
+            companyMapping.phoneNumberId,
+            companyMapping.accessToken
+          );
+          
+          await sendMessage({
+            chatId,
+            senderId: attendantUserId,
+            text: FALLBACK_MESSAGE,
+            status: 'sent',
+            isFromWhatsApp: false,
+          });
+          
+          await writeAiLog({
+            companyId: companyMapping.companyId,
+            chatId,
+            customerPhone: phoneNumber,
+            inboundMessage: messageText,
+            action: 'skip',
+            error: err?.message || 'whatsapp_send_error_fallback_sent',
+            meta,
+          });
+          
+          console.log('✅ Mensagem de fallback enviada com sucesso');
+        } catch (fallbackErr: any) {
+          console.error('❌ Erro ao enviar mensagem de fallback:', fallbackErr);
+          
+          await writeAiLog({
+            companyId: companyMapping.companyId,
+            chatId,
+            customerPhone: phoneNumber,
+            inboundMessage: messageText,
+            action: 'skip',
+            error: 'ai_and_fallback_failed',
+            meta: {
+              originalError: err?.message,
+              fallbackError: fallbackErr?.message,
+            },
+          });
+        }
+        return;
       }
 
       await sendMessage({

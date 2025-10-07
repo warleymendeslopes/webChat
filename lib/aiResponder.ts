@@ -36,5 +36,14 @@ export function generateSeniorSalesReply(params: {
   const message = lines.filter(Boolean).join(' ');
   const confidence = Math.min(0.9, 0.5 + lines.length * 0.1);
   const action = confidence >= 0.6 ? 'reply' : 'handoff_human';
+
+
+  console.log('AI gerou resposta:', {
+    input: customerMessage,
+    output: message,
+    outputLength: message?.length,
+    confidence,
+    action,
+  });
   return { message, confidence, action };
 }
