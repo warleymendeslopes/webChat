@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
-import { LogOut, Settings, Users } from "lucide-react";
+import { Bot, LogOut, Settings, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -12,7 +12,9 @@ export default function AdminPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { role, companyId, loading: roleLoading } = useUserRole(user);
-  const [activeTab, setActiveTab] = useState<"config" | "users">("config");
+  const [activeTab, setActiveTab] = useState<"config" | "users" | "ai">(
+    "config"
+  );
 
   // Redirecionar se não for admin
   useEffect(() => {
@@ -58,6 +60,19 @@ export default function AdminPage() {
   const [pendingInvites, setPendingInvites] = useState<any[]>([]);
   const [inviting, setInviting] = useState(false);
 
+  // AI Config state
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiContext, setAiContext] = useState("");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiStatus, setAiStatus] = useState<
+    "draft" | "validating" | "active" | "error"
+  >("draft");
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
+  const [aiAnswers, setAiAnswers] = useState<Record<number, string>>({});
+  const [aiLogs, setAiLogs] = useState<any[]>([]);
+  const [aiHasKey, setAiHasKey] = useState(false);
+
   // Toast notifications
   const [toast, setToast] = useState<{
     type: "success" | "error" | "info";
@@ -102,6 +117,34 @@ export default function AdminPage() {
     if (activeTab === "users") {
       loadData();
     }
+  }, [companyId, activeTab]);
+
+  // Load AI config when tab opened
+  useEffect(() => {
+    if (!companyId || activeTab !== "ai") return;
+    (async () => {
+      try {
+        setAiLoading(true);
+        const res = await fetch(`/api/admin/ai-config?companyId=${companyId}`);
+        const data = await res.json();
+        if (res.ok) {
+          setAiContext(data.context || "");
+          setAiEnabled(!!data.enabled);
+          setAiStatus(data.status || "draft");
+          setAiHasKey(!!data.hasApiKey);
+        }
+        // Load logs
+        const logsRes = await fetch(
+          `/api/admin/ai-logs?companyId=${companyId}&limit=50`
+        );
+        const logsData = await logsRes.json();
+        if (logsRes.ok) setAiLogs(logsData.logs || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setAiLoading(false);
+      }
+    })();
   }, [companyId, activeTab]);
 
   const handleLogout = async () => {
@@ -300,6 +343,17 @@ export default function AdminPage() {
             >
               <Users size={20} />
               <span>Atendentes</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("ai")}
+              className={`${
+                activeTab === "ai"
+                  ? "border-green-500 text-green-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              } flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              <Bot size={20} />
+              <span>Atendente AI</span>
             </button>
           </nav>
         </div>
@@ -531,6 +585,347 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* AI Tab */}
+        {activeTab === "ai" && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Atendente AI
+            </h2>
+
+            {aiLoading ? (
+              <div className="py-8 flex justify-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500"></div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      Status: <span className="font-medium">{aiStatus}</span>
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Ativado:{" "}
+                      <span className="font-medium">
+                        {aiEnabled ? "Sim" : "Não"}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    disabled={aiStatus !== "active"}
+                    onClick={async () => {
+                      if (!companyId) return;
+                      try {
+                        const res = await fetch("/api/admin/ai-config/toggle", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            companyId,
+                            enabled: !aiEnabled,
+                          }),
+                        });
+                        if (res.ok) {
+                          setAiEnabled(!aiEnabled);
+                          showToast(
+                            !aiEnabled
+                              ? "Atendente AI ativado"
+                              : "Atendente AI desativado",
+                            "success"
+                          );
+                        } else {
+                          const data = await res.json();
+                          showToast(
+                            data.error || "Não foi possível alternar",
+                            "error"
+                          );
+                        }
+                      } catch (e) {
+                        console.error(e);
+                        showToast("Erro ao alternar AI", "error");
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg text-white ${
+                      aiStatus === "active"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {aiEnabled ? "Desativar" : "Ativar"}
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!companyId) return;
+                    try {
+                      // Salvar rascunho
+                      const saveRes = await fetch("/api/admin/ai-config", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          companyId,
+                          context: aiContext,
+                          aiApiKey: aiApiKey || undefined,
+                        }),
+                      });
+                      if (!saveRes.ok) {
+                        const data = await saveRes.json();
+                        showToast(data.error || "Erro ao salvar", "error");
+                        return;
+                      }
+
+                      // Validar chave e gerar perguntas
+                      const valRes = await fetch(
+                        "/api/admin/ai-config/validate",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ companyId, apiKey: aiApiKey }),
+                        }
+                      );
+                      const val = await valRes.json();
+                      if (!valRes.ok) {
+                        showToast(val.error || "Erro na validação", "error");
+                        return;
+                      }
+                      setAiQuestions(val.questions || []);
+                      setAiStatus("validating");
+                      showToast(
+                        "Validação iniciada. Responda às perguntas abaixo.",
+                        "success"
+                      );
+                    } catch (e) {
+                      console.error(e);
+                      showToast("Erro ao validar", "error");
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Contexto da empresa
+                    </label>
+                    <textarea
+                      value={aiContext}
+                      onChange={(e) => setAiContext(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
+                      rows={6}
+                      placeholder="Descreva produtos, público, políticas, tom de voz, objetivos..."
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Chave de API do Gemini
+                    </label>
+                    <input
+                      type="password"
+                      value={aiApiKey}
+                      onChange={(e) => setAiApiKey(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
+                      placeholder={
+                        aiHasKey ? "(já cadastrada no servidor)" : "AIza..."
+                      }
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      A chave é armazenada no servidor. Preencha apenas para
+                      atualizar.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/admin/ai-config/ping", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              apiKey: aiApiKey || undefined,
+                              companyId,
+                            }),
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.ok) {
+                            showToast(
+                              "Conectividade OK: chave válida e pronta para uso.",
+                              "success"
+                            );
+                          } else {
+                            showToast(
+                              data.error || "Falha na conectividade da chave",
+                              "error"
+                            );
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          showToast("Erro ao testar conectividade", "error");
+                        }
+                      }}
+                      className="mt-2 inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
+                    >
+                      Testar Conectividade
+                    </button>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700"
+                  >
+                    Testar e Ativar
+                  </button>
+                </form>
+
+                {aiQuestions.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="font-semibold text-gray-900 mb-2">
+                      Perguntas de validação
+                    </h3>
+                    <div className="space-y-3">
+                      {aiQuestions.map((q, idx) => (
+                        <div key={idx}>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {idx + 1}. {q}
+                          </label>
+                          <textarea
+                            value={aiAnswers[idx] || ""}
+                            onChange={(e) =>
+                              setAiAnswers({
+                                ...aiAnswers,
+                                [idx]: e.target.value,
+                              })
+                            }
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
+                            rows={3}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!companyId) return;
+                        try {
+                          const answersPayload = Object.entries(aiAnswers).map(
+                            ([i, answer]) => ({
+                              question: aiQuestions[Number(i)],
+                              answer,
+                            })
+                          );
+                          const res = await fetch(
+                            "/api/admin/ai-config/answers",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                companyId,
+                                answers: answersPayload,
+                              }),
+                            }
+                          );
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setAiStatus("active");
+                            setAiEnabled(true);
+                            showToast(
+                              "Atendente AI ativado com sucesso!",
+                              "success"
+                            );
+                          } else {
+                            const missing = data?.details?.missingTopics;
+                            const msgBase =
+                              data?.error ||
+                              "Respostas insuficientes. Complete melhor as informações.";
+                            const msg =
+                              Array.isArray(missing) && missing.length
+                                ? `${msgBase} (Tópicos ausentes: ${missing.join(
+                                    ", "
+                                  )})`
+                                : msgBase;
+                            showToast(msg, "error");
+                            setAiStatus("error");
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          showToast("Erro ao salvar respostas", "error");
+                        }
+                      }}
+                      className="mt-4 w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700"
+                    >
+                      Confirmar respostas e ativar
+                    </button>
+                  </div>
+                )}
+
+                {/* Logs da AI */}
+                <div className="mt-8">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900">
+                      Logs recentes da AI
+                    </h3>
+                    <button
+                      className="text-sm text-gray-600 hover:text-gray-900"
+                      onClick={async () => {
+                        if (!companyId) return;
+                        try {
+                          const logsRes = await fetch(
+                            `/api/admin/ai-logs?companyId=${companyId}&limit=100`
+                          );
+                          const logsData = await logsRes.json();
+                          if (logsRes.ok) setAiLogs(logsData.logs || []);
+                        } catch (e) {
+                          console.error(e);
+                          showToast("Erro ao carregar logs", "error");
+                        }
+                      }}
+                    >
+                      Atualizar
+                    </button>
+                  </div>
+                  {aiLogs.length === 0 ? (
+                    <p className="text-sm text-gray-500">Sem logs ainda.</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
+                      {aiLogs.map((log, idx) => (
+                        <div key={idx} className="p-3 text-sm">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-gray-900">
+                              {log.action}
+                            </span>
+                            <span className="text-gray-500">
+                              {new Date(log.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-gray-700">
+                            <span className="font-medium">Cliente:</span>{" "}
+                            {log.customerPhone}
+                          </div>
+                          <div className="mt-1 text-gray-700">
+                            <span className="font-medium">Mensagem:</span>{" "}
+                            {log.inboundMessage}
+                          </div>
+                          {log.aiMessage && (
+                            <div className="mt-1 text-gray-700">
+                              <span className="font-medium">Resposta AI:</span>{" "}
+                              {log.aiMessage}
+                            </div>
+                          )}
+                          {typeof log.confidence === "number" && (
+                            <div className="mt-1 text-gray-500">
+                              Confiança: {Math.round(log.confidence * 100)}%
+                            </div>
+                          )}
+                          {log.error && (
+                            <div className="mt-1 text-red-600">
+                              Erro: {log.error}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

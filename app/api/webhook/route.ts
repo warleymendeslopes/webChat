@@ -1,4 +1,8 @@
+import { writeAiLog } from '@/lib/aiLog';
+import { generateSeniorSalesReply } from '@/lib/aiResponder';
 import { createUser, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage } from '@/lib/firestore';
+import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { getAiConfig, getCompanyByPhoneNumberId } from '@/lib/whatsappConfig';
 import { WhatsAppMessage } from '@/types';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -48,6 +52,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
   const phoneNumber = message.from;
   const messageText = message.text?.body || '';
   const whatsappMessageId = message.id;
+  const phoneNumberId = metadata?.metadata?.phone_number_id;
 
   // Get or create user
   let user = await getUserByPhoneNumber(phoneNumber);
@@ -90,6 +95,96 @@ async function handleIncomingMessage(message: any, metadata: any) {
   }
 
   console.log(`Message saved: ChatId=${chatId}, MessageId=${messageId}, From=${phoneNumber}`);
+
+  // AI auto-reply if enabled
+  try {
+    if (!phoneNumberId) {
+      console.log('AI: no phoneNumberId in metadata');
+      return;
+    }
+    const companyMapping = await getCompanyByPhoneNumberId(phoneNumberId);
+    if (!companyMapping) {
+      console.log('AI: no company mapping for phoneNumberId', phoneNumberId);
+      return;
+    }
+    const aiConfig = await getAiConfig(companyMapping.companyId);
+    if (!aiConfig) {
+      console.log('AI: no aiConfig for company', companyMapping.companyId);
+      return;
+    }
+    if (!aiConfig.enabled || aiConfig.status !== 'active') {
+      console.log('AI: disabled or not active', { enabled: aiConfig.enabled, status: aiConfig.status });
+      await writeAiLog({
+        companyId: companyMapping.companyId,
+        chatId,
+        customerPhone: phoneNumber,
+        inboundMessage: messageText,
+        action: 'skip',
+        meta: { reason: 'disabled_or_not_active' },
+      });
+      return;
+    }
+
+    const ai = generateSeniorSalesReply({
+      context: aiConfig.context || '',
+      qna: aiConfig.qna || [],
+      customerMessage: messageText,
+    });
+
+    if (ai.action === 'reply') {
+      await sendWhatsAppMessage(
+        phoneNumber,
+        ai.message,
+        companyMapping.phoneNumberId,
+        companyMapping.accessToken
+      );
+
+      await sendMessage({
+        chatId,
+        senderId: attendantUserId,
+        text: ai.message,
+        status: 'sent',
+        isFromWhatsApp: false,
+      });
+
+      await writeAiLog({
+        companyId: companyMapping.companyId,
+        chatId,
+        customerPhone: phoneNumber,
+        inboundMessage: messageText,
+        aiMessage: ai.message,
+        confidence: ai.confidence,
+        action: 'reply',
+      });
+
+      console.log('AI auto-reply sent');
+    } else {
+      await writeAiLog({
+        companyId: companyMapping.companyId,
+        chatId,
+        customerPhone: phoneNumber,
+        inboundMessage: messageText,
+        confidence: ai.confidence,
+        action: 'handoff_human',
+        meta: { note: 'confidence below threshold' },
+      });
+    }
+  } catch (e: any) {
+    console.error('AI auto-reply error:', e);
+    try {
+      const companyMapping = phoneNumberId ? await getCompanyByPhoneNumberId(phoneNumberId) : null;
+      if (companyMapping) {
+        await writeAiLog({
+          companyId: companyMapping.companyId,
+          chatId,
+          customerPhone: phoneNumber,
+          inboundMessage: messageText,
+          action: 'skip',
+          error: e?.message || 'unknown',
+        });
+      }
+    } catch {}
+  }
 }
 
 

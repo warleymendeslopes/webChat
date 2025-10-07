@@ -19,3 +19,34 @@ export async function getWhatsAppConfig(companyId: string) {
     throw error;
   }
 }
+
+export async function getCompanyByPhoneNumberId(phoneNumberId: string) {
+  try {
+    const collection = await getCollection('webChatConfigs');
+    const config = await collection.findOne({ whatsappPhoneNumberId: phoneNumberId, isActive: true });
+
+    if (!config) {
+      return null;
+    }
+
+    return {
+      companyId: config.companyId as string,
+      phoneNumberId: config.whatsappPhoneNumberId as string,
+      accessToken: config.whatsappAccessToken as string,
+    };
+  } catch (error) {
+    console.error('Error fetching company by phone number id:', error);
+    throw error;
+  }
+}
+
+export async function getAiConfig(companyId: string) {
+  try {
+    const collection = await getCollection('aiConfigs');
+    const ai = await collection.findOne({ companyId });
+    return ai || null;
+  } catch (error) {
+    console.error('Error fetching AI config:', error);
+    throw error;
+  }
+}
