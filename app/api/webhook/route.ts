@@ -114,14 +114,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
     }
     if (!aiConfig.enabled || aiConfig.status !== 'active') {
       console.log('AI: disabled or not active', { enabled: aiConfig.enabled, status: aiConfig.status });
-      await writeAiLog({
-        companyId: companyMapping.companyId,
-        chatId,
-        customerPhone: phoneNumber,
-        inboundMessage: messageText,
-        action: 'skip',
-        meta: { reason: 'disabled_or_not_active' },
-      });
+      // Do not store logs when AI is disabled/not active
       return;
     }
 
