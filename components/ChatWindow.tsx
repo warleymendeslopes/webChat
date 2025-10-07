@@ -107,48 +107,64 @@ export default function ChatWindow({
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-gray-100 border-b border-gray-300 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="lg:hidden text-gray-600 hover:text-gray-900"
-            >
-              <ArrowLeft size={24} />
-            </button>
-          )}
-          <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center">
-            <span className="text-gray-600 font-semibold">
-              {recipientPhone[0]}
-            </span>
+      {/* Sticky Header + Banner */}
+      <div className="sticky top-0 z-20">
+        <div className="bg-gray-100 border-b border-gray-300 px-4 py-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="lg:hidden text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft size={24} />
+              </button>
+            )}
+            <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center">
+              <span className="text-gray-600 font-semibold">
+                {recipientPhone[0]}
+              </span>
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">{recipientPhone}</h2>
+              <p className="text-xs text-gray-500">
+                {aiControl ? "IA no controle" : "Atendente"}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold text-gray-900">{recipientPhone}</h2>
-            <p className="text-xs text-gray-500">
-              {aiControl ? "IA no controle" : "Atendente"}
-            </p>
+          <div className="flex items-center space-x-3">
+            <button className="text-gray-600 hover:text-gray-900">
+              <Video size={22} />
+            </button>
+            <button className="text-gray-600 hover:text-gray-900">
+              <Phone size={22} />
+            </button>
+            {aiControl && (
+              <button
+                onClick={handleDisableAi}
+                className="px-3 py-1.5 rounded bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+              >
+                Desativar IA
+              </button>
+            )}
+            <button className="text-gray-600 hover:text-gray-900">
+              <MoreVertical size={22} />
+            </button>
           </div>
         </div>
-        <div className="flex items-center space-x-4">
-          <button className="text-gray-600 hover:text-gray-900">
-            <Video size={22} />
-          </button>
-          <button className="text-gray-600 hover:text-gray-900">
-            <Phone size={22} />
-          </button>
-          {aiControl && (
+
+        {aiControl && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between">
+            <span className="text-amber-900 text-sm font-medium">
+              IA no controle desta conversa
+            </span>
             <button
               onClick={handleDisableAi}
-              className="px-3 py-1 rounded bg-red-600 text-white text-sm hover:bg-red-700"
+              className="px-3 py-1.5 rounded bg-red-600 text-white text-sm font-medium hover:bg-red-700"
             >
               Desativar IA
             </button>
-          )}
-          <button className="text-gray-600 hover:text-gray-900">
-            <MoreVertical size={22} />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
