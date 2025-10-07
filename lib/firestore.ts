@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
@@ -102,6 +103,22 @@ export async function getOrCreateChat(participants: string[], isWhatsAppChat: bo
   return await createChat(participants, isWhatsAppChat);
 }
 
+// Increment unread for a recipient when a new message arrives
+export async function incrementUnread(chatId: string, recipientUserId: string) {
+  const chatRef = doc(db, 'chats', chatId);
+  await updateDoc(chatRef, {
+    [`unreadCount.${recipientUserId}`]: increment(1),
+  });
+}
+
+// Clear unread for a user when they open a chat
+export async function clearUnread(chatId: string, userId: string) {
+  const chatRef = doc(db, 'chats', chatId);
+  await updateDoc(chatRef, {
+    [`unreadCount.${userId}`]: 0,
+  });
+}
+
 // Messages
 export async function sendMessage(messageData: Omit<Message, 'id' | 'timestamp'>) {
   // Remove undefined fields (Firestore doesn't accept them)
@@ -123,8 +140,20 @@ export async function sendMessage(messageData: Omit<Message, 'id' | 'timestamp'>
 
   // Update chat's last message
   const chatRef = doc(db, 'chats', messageData.chatId);
+  const lastMessagePayload: any = {
+    senderId: messageData.senderId,
+    timestamp: serverTimestamp(),
+  };
+  if (messageData.text) lastMessagePayload.text = messageData.text;
+  if (messageData.mediaUrl) lastMessagePayload.mediaUrl = messageData.mediaUrl;
+  if (messageData.mediaType) lastMessagePayload.mediaType = messageData.mediaType;
+
+  // Build unread increments for all participants except the sender
+  // We cannot read participants here without another read, so we rely on webhook/senders to also update.
+  // However, we can safely increment using dynamic fields if caller provides recipients.
   await updateDoc(chatRef, {
     lastMessageTimestamp: serverTimestamp(),
+    lastMessage: lastMessagePayload,
   });
 
   return messageRef.id;

@@ -1,10 +1,18 @@
 import { sendMessage, updateMessageStatus } from '@/lib/firestore';
 import { sendWhatsAppMedia, sendWhatsAppMessage } from '@/lib/whatsapp';
+import { getWhatsAppConfig } from '@/lib/whatsappConfig';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { chatId, senderId, to, message, mediaUrl, mediaType } = await request.json();
+    const { chatId, senderId, to, message, mediaUrl, mediaType, companyId } = await request.json();
+
+    if (!companyId) {
+      return NextResponse.json({ error: 'CompanyId required' }, { status: 400 });
+    }
+
+    // Buscar configuração do WhatsApp do MongoDB
+    const whatsappConfig = await getWhatsAppConfig(companyId);
     
     console.log('📤 Send message request:', { chatId, senderId, to, message: message?.substring(0, 50) });
 
@@ -17,15 +25,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Send via WhatsApp
-    console.log('📞 Sending to WhatsApp...');
     let whatsappResponse;
     try {
       if (mediaUrl && mediaType) {
-        whatsappResponse = await sendWhatsAppMedia(to, mediaType, mediaUrl, message);
+        whatsappResponse = await sendWhatsAppMedia(
+          to,
+          mediaType,
+          mediaUrl,
+          message,
+          whatsappConfig.phoneNumberId,
+          whatsappConfig.accessToken
+        );
       } else {
-        whatsappResponse = await sendWhatsAppMessage(to, message);
+        whatsappResponse = await sendWhatsAppMessage(
+          to,
+          message,
+          whatsappConfig.phoneNumberId,
+          whatsappConfig.accessToken
+        );
       }
-      console.log('✅ WhatsApp response:', whatsappResponse);
     } catch (whatsappError: any) {
       console.error('❌ WhatsApp API error:', whatsappError.response?.data || whatsappError.message);
       return NextResponse.json(

@@ -1,20 +1,37 @@
 "use client";
 
-import AuthForm from "@/components/AuthForm";
 import ChatList from "@/components/ChatList";
 import ChatWindow from "@/components/ChatWindow";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { auth } from "@/lib/firebase";
-import { getChatRecipientPhone } from "@/lib/firestore";
+import { clearUnread, getChatRecipientPhone } from "@/lib/firestore";
 import { signOut } from "firebase/auth";
-import { LogOut, Menu, MessageCircle, X } from "lucide-react";
-import { useState } from "react";
+import { LogOut, Menu, MessageCircle, Settings, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  const { user, loading, firestoreUserId } = useAuth();
+  const router = useRouter();
+  const { user, loading: authLoading, firestoreUserId } = useAuth();
+  const { role, companyId, loading: roleLoading } = useUserRole(user);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [recipientPhone, setRecipientPhone] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Redirecionar baseado no role
+  useEffect(() => {
+    if (authLoading || roleLoading) return;
+
+    if (!user) {
+      // Não logado - redirecionar para login
+      router.push("/login");
+    } else if (user && role === null) {
+      // Logado mas não cadastrado - redirecionar para login (deixar escolher criar empresa)
+      router.push("/login");
+    }
+  }, [user, role, authLoading, roleLoading, router]);
 
   const handleLogout = async () => {
     try {
@@ -32,8 +49,12 @@ export default function Home() {
     if (firestoreUserId) {
       const phone = await getChatRecipientPhone(chatId, firestoreUserId);
       setRecipientPhone(phone);
+      // Clear unread for the current user when opening the chat
+      await clearUnread(chatId, firestoreUserId);
     }
   };
+
+  const loading = authLoading || roleLoading;
 
   if (loading) {
     return (
@@ -43,8 +64,18 @@ export default function Home() {
     );
   }
 
-  if (!user || !firestoreUserId) {
-    return <AuthForm onAuthSuccess={() => {}} />;
+  // Se não tem user, role ou companyId, está sendo redirecionado
+  if (!user || !firestoreUserId || !role || !companyId) {
+    return null;
+  }
+
+  // Apenas admin e attendant podem acessar o chat
+  if (role !== "admin" && role !== "attendant") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-600">Acesso negado</p>
+      </div>
+    );
   }
 
   return (
@@ -62,6 +93,15 @@ export default function Home() {
           <h1 className="text-xl font-semibold">WhatsApp Chat</h1>
         </div>
         <div className="flex items-center space-x-4">
+          {role === "admin" && (
+            <Link
+              href="/admin"
+              className="hidden sm:flex items-center space-x-2 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors"
+            >
+              <Settings size={20} />
+              <span className="text-sm">Admin</span>
+            </Link>
+          )}
           <div className="hidden sm:flex items-center space-x-2">
             <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
               <span className="text-sm font-semibold">
@@ -69,6 +109,11 @@ export default function Home() {
               </span>
             </div>
             <span className="text-sm">{user.displayName || user.email}</span>
+            {role === "attendant" && (
+              <span className="text-xs bg-green-500 px-2 py-1 rounded">
+                Atendente
+              </span>
+            )}
           </div>
           <button
             onClick={handleLogout}
@@ -112,6 +157,7 @@ export default function Home() {
               chatId={selectedChatId}
               currentUserId={firestoreUserId}
               recipientPhone={recipientPhone}
+              companyId={companyId}
               onBack={() => setSelectedChatId(null)}
             />
           ) : (

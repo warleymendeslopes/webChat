@@ -1,4 +1,4 @@
-import { createUser, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, sendMessage } from '@/lib/firestore';
+import { createUser, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage } from '@/lib/firestore';
 import { WhatsAppMessage } from '@/types';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -81,6 +81,13 @@ async function handleIncomingMessage(message: any, metadata: any) {
     isFromWhatsApp: true,
     whatsappMessageId,
   });
+
+  // Increment unread for attendant
+  try {
+    await incrementUnread(chatId, attendantUserId);
+  } catch (e) {
+    console.error('Failed to increment unread:', e);
+  }
 
   console.log(`Message saved: ChatId=${chatId}, MessageId=${messageId}, From=${phoneNumber}`);
 }

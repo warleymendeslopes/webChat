@@ -1,14 +1,16 @@
 import axios from 'axios';
 
-const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL;
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0';
 
-export async function sendWhatsAppMessage(to: string, message: string) {
+export async function sendWhatsAppMessage(
+  to: string,
+  message: string,
+  phoneNumberId: string,
+  accessToken: string
+) {
   try {
     const response = await axios.post(
-      // `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
-      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
+      `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
       {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -21,7 +23,7 @@ export async function sendWhatsAppMessage(to: string, message: string) {
       },
       {
         headers: {
-          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       }
@@ -38,7 +40,9 @@ export async function sendWhatsAppMedia(
   to: string,
   mediaType: 'image' | 'video' | 'audio' | 'document',
   mediaUrl: string,
-  caption?: string
+  caption: string | undefined,
+  phoneNumberId: string,
+  accessToken: string
 ) {
   try {
     const payload: any = {
@@ -57,11 +61,11 @@ export async function sendWhatsAppMedia(
     }
 
     const response = await axios.post(
-      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+      `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
       payload,
       {
         headers: {
-          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       }
@@ -74,10 +78,14 @@ export async function sendWhatsAppMedia(
   }
 }
 
-export async function markMessageAsRead(messageId: string) {
+export async function markMessageAsRead(
+  messageId: string,
+  phoneNumberId: string,
+  accessToken: string
+) {
   try {
     const response = await axios.post(
-      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+      `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
       {
         messaging_product: 'whatsapp',
         status: 'read',
@@ -85,7 +93,7 @@ export async function markMessageAsRead(messageId: string) {
       },
       {
         headers: {
-          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       }

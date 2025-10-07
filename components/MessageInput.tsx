@@ -7,12 +7,14 @@ interface MessageInputProps {
   chatId: string;
   senderId: string;
   recipientPhone: string;
+  companyId: string;
 }
 
 export default function MessageInput({
   chatId,
   senderId,
   recipientPhone,
+  companyId,
 }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -33,6 +35,7 @@ export default function MessageInput({
           senderId,
           to: recipientPhone,
           message: message.trim(),
+          companyId,
         }),
       });
 
@@ -93,6 +96,7 @@ export default function MessageInput({
           message: message.trim() || undefined,
           mediaUrl,
           mediaType,
+          companyId,
         }),
       });
 

@@ -11,6 +11,7 @@ interface ChatWindowProps {
   chatId: string;
   currentUserId: string;
   recipientPhone: string;
+  companyId: string;
   onBack?: () => void;
 }
 
@@ -18,11 +19,34 @@ export default function ChatWindow({
   chatId,
   currentUserId,
   recipientPhone,
+  companyId,
   onBack,
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
+
+  function playBeep() {
+    try {
+      const AudioCtx =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+      oscillator.stop(ctx.currentTime + 0.18);
+    } catch (_) {
+      // ignore audio errors
+    }
+  }
 
   useEffect(() => {
     const unsubscribe = subscribeToMessages(chatId, (updatedMessages) => {
@@ -36,6 +60,24 @@ export default function ChatWindow({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      prevMessageCountRef.current = 0;
+      return;
+    }
+
+    const previousCount = prevMessageCountRef.current;
+    const currentCount = messages.length;
+    prevMessageCountRef.current = currentCount;
+
+    if (currentCount > previousCount) {
+      const lastMessage = messages[currentCount - 1];
+      if (lastMessage && lastMessage.senderId !== currentUserId) {
+        playBeep();
+      }
+    }
+  }, [messages, currentUserId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -102,6 +144,7 @@ export default function ChatWindow({
         chatId={chatId}
         senderId={currentUserId}
         recipientPhone={recipientPhone}
+        companyId={companyId}
       />
     </div>
   );
