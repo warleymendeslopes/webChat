@@ -119,13 +119,6 @@ export default function ChatList({
             <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center">
               <MessageCircle size={24} className="text-gray-600" />
             </div>
-            {((chat.unreadCount && chat.unreadCount[userId] > 0) ||
-              (chat.lastMessage &&
-                chat.lastMessage.senderId !== userId &&
-                selectedChatId !== chat.id &&
-                !(viewedChatIds && viewedChatIds.includes(chat.id)))) && (
-              <span className="absolute -top-1 -right-1 block w-3 h-3 rounded-full bg-green-500"></span>
-            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-baseline">
