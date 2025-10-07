@@ -5,6 +5,7 @@ import ChatList from "@/components/ChatList";
 import ChatWindow from "@/components/ChatWindow";
 import { useAuth } from "@/hooks/useAuth";
 import { auth } from "@/lib/firebase";
+import { getChatRecipientPhone } from "@/lib/firestore";
 import { signOut } from "firebase/auth";
 import { LogOut, Menu, MessageCircle, X } from "lucide-react";
 import { useState } from "react";
@@ -23,10 +24,15 @@ export default function Home() {
     }
   };
 
-  const handleSelectChat = (chatId: string) => {
+  const handleSelectChat = async (chatId: string) => {
     setSelectedChatId(chatId);
-    setRecipientPhone("+5511999999999"); // TODO: Get actual recipient phone
     setIsMobileMenuOpen(false);
+
+    // Get the recipient's phone number from the chat
+    if (firestoreUserId) {
+      const phone = await getChatRecipientPhone(chatId, firestoreUserId);
+      setRecipientPhone(phone);
+    }
   };
 
   if (loading) {

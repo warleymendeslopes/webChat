@@ -7,7 +7,8 @@ const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 export async function sendWhatsAppMessage(to: string, message: string) {
   try {
     const response = await axios.post(
-      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+      // `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',

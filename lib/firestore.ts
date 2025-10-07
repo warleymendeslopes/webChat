@@ -104,10 +104,22 @@ export async function getOrCreateChat(participants: string[], isWhatsAppChat: bo
 
 // Messages
 export async function sendMessage(messageData: Omit<Message, 'id' | 'timestamp'>) {
-  const messageRef = await addDoc(collection(db, 'messages'), {
-    ...messageData,
+  // Remove undefined fields (Firestore doesn't accept them)
+  const cleanData: any = {
+    chatId: messageData.chatId,
+    senderId: messageData.senderId,
+    status: messageData.status,
+    isFromWhatsApp: messageData.isFromWhatsApp,
     timestamp: serverTimestamp(),
-  });
+  };
+
+  // Only add optional fields if they have values
+  if (messageData.text) cleanData.text = messageData.text;
+  if (messageData.mediaUrl) cleanData.mediaUrl = messageData.mediaUrl;
+  if (messageData.mediaType) cleanData.mediaType = messageData.mediaType;
+  if (messageData.whatsappMessageId) cleanData.whatsappMessageId = messageData.whatsappMessageId;
+
+  const messageRef = await addDoc(collection(db, 'messages'), cleanData);
 
   // Update chat's last message
   const chatRef = doc(db, 'chats', messageData.chatId);
@@ -243,12 +255,10 @@ export async function getOrCreateAttendant(firebaseAuthUid?: string) {
   const usersSnapshot = await getDocs(usersQuery);
   
   if (!usersSnapshot.empty) {
-    console.log(`Using first available user as attendant: ${usersSnapshot.docs[0].id}`);
     return usersSnapshot.docs[0].id;
   }
   
   // Last resort: return 'system' (for backward compatibility)
-  console.warn('No attendant user found, using "system" as fallback');
   return 'system';
 }
 
@@ -284,6 +294,76 @@ export async function getOrCreateUserByAuthUid(
   });
   
   return userRef.id;
+}
+
+// Get user by ID
+export async function getUserById(userId: string) {
+  const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', userId)));
+  
+  if (userDoc.empty) {
+    return null;
+  }
+  
+  const data = userDoc.docs[0].data();
+  return {
+    id: userDoc.docs[0].id,
+    ...data,
+  } as User;
+}
+
+// Normalize Brazilian phone number (add missing digit 9 for mobile)
+function normalizeBrazilianPhone(phone: string): string {
+  // Remove all non-digits
+  const digits = phone.replace(/\D/g, '');
+  
+  // Brazilian mobile format: 55 (country) + 2 (area) + 9 (mobile) + 8 (number)
+  // Total: 13 digits
+  
+  // If it's 12 digits and starts with 55, it's missing the 9
+  if (digits.length === 12 && digits.startsWith('55')) {
+    const countryCode = digits.substring(0, 2); // 55
+    const areaCode = digits.substring(2, 4); // 31, 11, etc
+    const number = digits.substring(4); // rest
+    
+    // Add the missing 9 after area code
+    return `${countryCode}${areaCode}9${number}`;
+  }
+  
+  // Already correct or not Brazilian
+  return digits;
+}
+
+// Get chat recipient phone number (for WhatsApp chats)
+export async function getChatRecipientPhone(chatId: string, currentUserId: string): Promise<string> {
+  // Get chat
+  const chatDoc = await getDocs(query(collection(db, 'chats'), where('__name__', '==', chatId)));
+  
+  if (chatDoc.empty) {
+    return '';
+  }
+  
+  const chatData = chatDoc.docs[0].data();
+  const participants = chatData.participants as string[];
+  
+  // Find the participant that is NOT the current user
+  const recipientId = participants.find(id => id !== currentUserId);
+  
+  if (!recipientId) {
+    return '';
+  }
+  
+  // Get recipient user data
+  const recipientDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', recipientId)));
+  
+  if (recipientDoc.empty) {
+    return '';
+  }
+  
+  const recipientData = recipientDoc.docs[0].data();
+  const rawPhone = recipientData.phoneNumber || '';
+  
+  // Normalize Brazilian phone numbers
+  return normalizeBrazilianPhone(rawPhone);
 }
 
 

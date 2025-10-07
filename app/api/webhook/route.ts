@@ -73,7 +73,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
   const chatId = await getOrCreateChat([user.id, attendantUserId], true);
 
   // Save message to Firestore
-  await sendMessage({
+  const messageId = await sendMessage({
     chatId,
     senderId: user.id,
     text: messageText,
@@ -82,7 +82,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
     whatsappMessageId,
   });
 
-  console.log(`Message received from ${phoneNumber}: ${messageText}`);
+  console.log(`Message saved: ChatId=${chatId}, MessageId=${messageId}, From=${phoneNumber}`);
 }
 
 

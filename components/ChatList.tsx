@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 interface ChatListProps {
   userId: string;
-  onSelectChat: (chatId: string) => void;
+  onSelectChat: (chatId: string) => void | Promise<void>;
   selectedChatId?: string;
 }
 

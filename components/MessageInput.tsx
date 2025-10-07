@@ -138,7 +138,7 @@ export default function MessageInput({
             onKeyPress={handleKeyPress}
             placeholder="Digite uma mensagem"
             disabled={isSending}
-            className="w-full px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:border-green-500 pr-10"
+            className="w-full px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:border-green-500 pr-10 text-gray-900 placeholder:text-gray-400"
           />
           <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900">
             <Smile size={20} />
