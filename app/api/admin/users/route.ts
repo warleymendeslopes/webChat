@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already exists' }, { status: 409 });
     }
 
-    const user: Partial<AppUser> = {
+    const user: Omit<AppUser, '_id'> = {
       firebaseAuthUid,
       email,
       name,
@@ -55,9 +55,10 @@ export async function POST(request: NextRequest) {
       companyId,
       createdAt: new Date(),
       isActive: true,
-    };
+    } as Omit<AppUser, '_id'>;
 
-    await collection.insertOne(user);
+    // Cast to any to satisfy Mongo's OptionalId<Document> typing
+    await collection.insertOne(user as any);
 
     return NextResponse.json({
       success: true,
