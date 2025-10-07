@@ -5,8 +5,9 @@ export async function generateSeniorSalesReply(params: {
   qna: QnaItem[];
   customerMessage: string;
   apiKey: string;
+  conversationContext?: string;
 }): Promise<{ message: string; confidence: number; action: 'reply' | 'handoff_human' } | null> {
-  const { context, qna, customerMessage, apiKey } = params;
+  const { context, qna, customerMessage, apiKey, conversationContext } = params;
 
   // Se não tiver API key, retorna null (não deve ter sido chamado)
   if (!apiKey || apiKey.trim().length === 0) {
@@ -20,6 +21,9 @@ export async function generateSeniorSalesReply(params: {
   CONTEXTO DA EMPRESA:
   ${context || 'Não há contexto específico disponível.'}
   
+  HISTÓRICO (últimas 24h):
+  ${conversationContext || 'Sem histórico recente.'}
+  
   PERGUNTAS E RESPOSTAS FREQUENTES:
   ${qna && qna.length > 0 
   ? qna.map((item, i) => `${i + 1}. Pergunta: ${item.question}\n   Resposta: ${item.answer}`).join('\n\n')
@@ -27,12 +31,12 @@ export async function generateSeniorSalesReply(params: {
   
   INSTRUÇÕES:
   1. Responda à mensagem do cliente de forma natural e profissional
-  2. Use as informações do contexto e das perguntas frequentes quando relevante
-  3. Seja cordial, mas direto ao ponto
+  2. Use as informações do contexto, das perguntas frequentes e do histórico recente
+  3. Dê continuidade à conversa; não se reapresente se não for necessário
   4. Mantenha respostas concisas (máximo 2-3 parágrafos)
   5. Incentive o próximo passo (enviar proposta, agendar atendimento, etc.)
   6. Use um tom de vendas consultivo e educado
-  7. Não invente informações que não estão no contexto ou QnA
+  7. Não invente informações que não estão no contexto, QnA ou histórico
   
   MENSAGEM DO CLIENTE:
   ${customerMessage}

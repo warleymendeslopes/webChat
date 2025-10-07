@@ -1,8 +1,10 @@
 import { Chat, Message, User } from '@/types';
 import {
+  Timestamp,
   addDoc,
   collection,
   doc,
+  limit as fbLimit,
   getDocs,
   increment,
   onSnapshot,
@@ -181,6 +183,25 @@ export function subscribeToMessages(chatId: string, callback: (messages: Message
       } as Message;
     });
     callback(messages);
+  });
+}
+
+export async function getMessagesSince(chatId: string, since: Date, max: number = 30): Promise<Message[]> {
+  const q = query(
+    collection(db, 'messages'),
+    where('chatId', '==', chatId),
+    where('timestamp', '>=', Timestamp.fromDate(since)),
+    orderBy('timestamp', 'asc'),
+    fbLimit(max)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((doc) => {
+    const data: any = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      timestamp: data.timestamp?.toDate() || new Date(),
+    } as Message;
   });
 }
 

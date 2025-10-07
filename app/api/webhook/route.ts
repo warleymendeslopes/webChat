@@ -1,6 +1,6 @@
 import { writeAiLog } from '@/lib/aiLog';
 import { generateSeniorSalesReply } from '@/lib/aiResponder';
-import { createUser, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage } from '@/lib/firestore';
+import { createUser, getMessagesSince, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage } from '@/lib/firestore';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { getAiConfig, getCompanyByPhoneNumberId } from '@/lib/whatsappConfig';
 import { WhatsAppMessage } from '@/types';
@@ -142,13 +142,28 @@ async function handleIncomingMessage(message: any, metadata: any) {
       return;
     }
 
-    console.log('🔑 API Key encontrada, chamando Gemini...');
+    console.log('🔑 API Key encontrada, montando histórico e chamando Gemini...');
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    let transcript = '';
+    try {
+      const recentMessages = await getMessagesSince(chatId, since, 30);
+      const lines = recentMessages.map((m) => {
+        const role = m.isFromWhatsApp ? 'Cliente' : 'Atendente';
+        const text = (m as any).text || '';
+        return `${role}: ${text}`;
+      });
+      transcript = lines.slice(-15).join('\n');
+    } catch (histErr) {
+      console.log('⚠️ Falha ao montar histórico, seguindo sem histórico.', histErr);
+    }
 
     const ai = await generateSeniorSalesReply({
       context: aiConfig.context || '',
       qna: aiConfig.qna || [],
       customerMessage: messageText,
       apiKey: apiKey,
+      conversationContext: transcript,
     });
 
     // Se a função retornou null (erro no Gemini), deixa para atendente humano
