@@ -65,12 +65,13 @@ export async function generateSeniorSalesReply(params: {
   }
 
   // Chamada REST v1 do Gemini para evitar problemas de versão (v1beta 404)
-  const MODEL = 'gemini-1.5-flash';
+  const MODEL = 'gemini-2.5-flash-lite';
   const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const body = {
     contents: [
       {
+        role: 'user',
         parts: [{ text: prompt }],
       },
     ],
