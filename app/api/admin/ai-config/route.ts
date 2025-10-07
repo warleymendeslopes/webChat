@@ -14,6 +14,12 @@ export async function GET(request: NextRequest) {
 
     const collection = await getCollection('aiConfigs');
     const config = await collection.findOne({ companyId });
+    console.log('🔍 GET /api/admin/ai-config - CompanyId:', companyId);
+    console.log('📊 Config encontrada:', {
+      exists: !!config,
+      hasApiKey: !!(config as any)?.aiApiKey,
+      apiKeyLength: (config as any)?.aiApiKey?.length,
+    });
 
     if (!config) {
       return NextResponse.json({
@@ -32,9 +38,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { aiApiKey, ...rest } = config as any;
+    console.log('✅ Retornando config com hasApiKey:', !!aiApiKey);
+    console.log('📋 QnA existente:', (rest.qna || []).length, 'respostas');
+    
     return NextResponse.json({
       ...rest,
       hasApiKey: !!aiApiKey,
+      qna: rest.qna || [], // Garantir que sempre retorna o array de respostas
     });
   } catch (error: any) {
     console.error('Error fetching AI config:', error);
@@ -47,6 +57,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { companyId, context, apiKeyRef, confidenceThreshold, handoffRules, maxConcurrentChats, aiApiKey } = body;
+
+    console.log('📝 POST /api/admin/ai-config - Dados recebidos:', {
+      companyId,
+      hasContext: !!context,
+      hasApiKey: !!aiApiKey,
+      apiKeyLength: aiApiKey?.length,
+      apiKeyType: typeof aiApiKey,
+    });
 
     if (!companyId) {
       return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
@@ -67,7 +85,15 @@ export async function POST(request: NextRequest) {
 
     if (typeof aiApiKey === 'string' && aiApiKey.length > 0) {
       (update as any).aiApiKey = aiApiKey; // NOTE: consider encrypting at rest in production
+      console.log('✅ Chave de API será salva no banco');
+    } else {
+      console.log('⚠️ Chave de API NÃO será salva (vazia ou inválida)');
     }
+
+    console.log('📦 Objeto update que será salvo:', {
+      ...update,
+      aiApiKey: update.aiApiKey ? '***OCULTA***' : undefined,
+    });
 
     const collection = await getCollection('aiConfigs');
     const result = await collection.updateOne(
@@ -75,6 +101,19 @@ export async function POST(request: NextRequest) {
       { $set: update, $setOnInsert: { createdAt: new Date(), qna: [] } },
       { upsert: true }
     );
+
+    console.log('💾 Resultado do MongoDB:', {
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+      upsertedCount: result.upsertedCount,
+    });
+
+    // Verificar se foi realmente salvo
+    const saved = await collection.findOne({ companyId });
+    console.log('🔍 Verificação após salvar:', {
+      hasApiKey: !!(saved as any)?.aiApiKey,
+      apiKeyLength: (saved as any)?.aiApiKey?.length,
+    });
 
     return NextResponse.json({ success: true, upserted: result.upsertedCount > 0 });
   } catch (error: any) {

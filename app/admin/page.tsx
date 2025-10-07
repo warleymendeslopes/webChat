@@ -126,12 +126,30 @@ export default function AdminPage() {
       try {
         setAiLoading(true);
         const res = await fetch(`/api/admin/ai-config?companyId=${companyId}`);
+
         const data = await res.json();
+        console.log("res", data);
         if (res.ok) {
           setAiContext(data.context || "");
           setAiEnabled(!!data.enabled);
           setAiStatus(data.status || "draft");
           setAiHasKey(!!data.hasApiKey);
+
+          // Carregar respostas existentes se houver
+          if (data.qna && Array.isArray(data.qna)) {
+            const existingAnswers: Record<number, string> = {};
+            data.qna.forEach((item: any, idx: number) => {
+              if (item.answer) {
+                existingAnswers[idx] = item.answer;
+              }
+            });
+            setAiAnswers(existingAnswers);
+
+            // Se já tem perguntas validadas, mostrar elas
+            if (data.qna.length > 0) {
+              setAiQuestions(data.qna.map((item: any) => item.question));
+            }
+          }
         }
         // Load logs
         const logsRes = await fetch(
@@ -601,6 +619,23 @@ export default function AdminPage() {
               </div>
             ) : (
               <>
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h3 className="font-semibold text-blue-900 mb-2">
+                    💡 Como funciona:
+                  </h3>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>
+                      <strong>"💾 Salvar apenas a chave"</strong> - Use quando
+                      só precisa trocar a chave de API (não perde as respostas
+                      já dadas)
+                    </li>
+                    <li>
+                      <strong>"Testar e Ativar"</strong> - Use na primeira
+                      configuração ou quando quiser re-validar tudo
+                    </li>
+                  </ul>
+                </div>
+
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">
@@ -612,9 +647,19 @@ export default function AdminPage() {
                         {aiEnabled ? "Sim" : "Não"}
                       </span>
                     </p>
+                    {!aiHasKey && (
+                      <p className="text-xs text-orange-600 mt-1">
+                        ⚠️ Configure a chave de API primeiro
+                      </p>
+                    )}
+                    {!aiContext && (
+                      <p className="text-xs text-orange-600 mt-1">
+                        ⚠️ Preencha o contexto da empresa
+                      </p>
+                    )}
                   </div>
                   <button
-                    disabled={aiStatus !== "active"}
+                    disabled={!aiHasKey || !aiContext}
                     onClick={async () => {
                       if (!companyId) return;
                       try {
@@ -647,10 +692,17 @@ export default function AdminPage() {
                       }
                     }}
                     className={`px-4 py-2 rounded-lg text-white ${
-                      aiStatus === "active"
-                        ? "bg-green-600 hover:bg-green-700"
+                      aiHasKey && aiContext
+                        ? aiEnabled
+                          ? "bg-orange-600 hover:bg-orange-700"
+                          : "bg-green-600 hover:bg-green-700"
                         : "bg-gray-400 cursor-not-allowed"
                     }`}
+                    title={
+                      !aiHasKey || !aiContext
+                        ? "Configure a chave de API e o contexto primeiro"
+                        : ""
+                    }
                   >
                     {aiEnabled ? "Desativar" : "Ativar"}
                   </button>
@@ -661,16 +713,34 @@ export default function AdminPage() {
                     e.preventDefault();
                     if (!companyId) return;
                     try {
+                      const payload = {
+                        companyId,
+                        context: aiContext,
+                        aiApiKey: aiApiKey || undefined,
+                      };
+
+                      console.log("📤 Enviando para /api/admin/ai-config:", {
+                        companyId,
+                        hasContext: !!aiContext,
+                        hasApiKey: !!aiApiKey,
+                        apiKeyLength: aiApiKey?.length,
+                        apiKeyValue: aiApiKey
+                          ? `${aiApiKey.substring(0, 10)}...`
+                          : "vazio",
+                      });
+
                       // Salvar rascunho
                       const saveRes = await fetch("/api/admin/ai-config", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          companyId,
-                          context: aiContext,
-                          aiApiKey: aiApiKey || undefined,
-                        }),
+                        body: JSON.stringify(payload),
                       });
+
+                      console.log("📥 Resposta do servidor:", {
+                        status: saveRes.status,
+                        ok: saveRes.ok,
+                      });
+
                       if (!saveRes.ok) {
                         const data = await saveRes.json();
                         showToast(data.error || "Erro ao salvar", "error");
@@ -722,7 +792,7 @@ export default function AdminPage() {
                       Chave de API do Gemini
                     </label>
                     <input
-                      type="password"
+                      type="text"
                       value={aiApiKey}
                       onChange={(e) => setAiApiKey(e.target.value)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
@@ -734,39 +804,87 @@ export default function AdminPage() {
                       A chave é armazenada no servidor. Preencha apenas para
                       atualizar.
                     </p>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch("/api/admin/ai-config/ping", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              apiKey: aiApiKey || undefined,
-                              companyId,
-                            }),
-                          });
-                          const data = await res.json();
-                          if (res.ok && data.ok) {
-                            showToast(
-                              "Conectividade OK: chave válida e pronta para uso.",
-                              "success"
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(
+                              "/api/admin/ai-config/ping",
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  apiKey: aiApiKey || undefined,
+                                  companyId,
+                                }),
+                              }
                             );
-                          } else {
+                            const data = await res.json();
+                            if (res.ok && data.ok) {
+                              showToast(
+                                "Conectividade OK: chave válida e pronta para uso.",
+                                "success"
+                              );
+                            } else {
+                              showToast(
+                                data.error || "Falha na conectividade da chave",
+                                "error"
+                              );
+                            }
+                          } catch (e) {
+                            console.error(e);
+                            showToast("Erro ao testar conectividade", "error");
+                          }
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
+                      >
+                        Testar Conectividade
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!companyId || !aiApiKey) {
                             showToast(
-                              data.error || "Falha na conectividade da chave",
+                              "Digite a chave de API primeiro",
                               "error"
                             );
+                            return;
                           }
-                        } catch (e) {
-                          console.error(e);
-                          showToast("Erro ao testar conectividade", "error");
-                        }
-                      }}
-                      className="mt-2 inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
-                    >
-                      Testar Conectividade
-                    </button>
+                          try {
+                            const res = await fetch("/api/admin/ai-config", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                companyId,
+                                context: aiContext,
+                                aiApiKey: aiApiKey,
+                              }),
+                            });
+                            if (res.ok) {
+                              showToast(
+                                "Chave de API atualizada com sucesso!",
+                                "success"
+                              );
+                              setAiHasKey(true);
+                              setAiApiKey(""); // Limpar o campo após salvar
+                            } else {
+                              const data = await res.json();
+                              showToast(
+                                data.error || "Erro ao salvar chave",
+                                "error"
+                              );
+                            }
+                          } catch (e) {
+                            console.error(e);
+                            showToast("Erro ao salvar chave", "error");
+                          }
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+                      >
+                        💾 Salvar apenas a chave
+                      </button>
+                    </div>
                   </div>
                   <button
                     type="submit"
@@ -778,9 +896,23 @@ export default function AdminPage() {
 
                 {aiQuestions.length > 0 && (
                   <div className="mt-6">
-                    <h3 className="font-semibold text-gray-900 mb-2">
-                      Perguntas de validação
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900">
+                        Perguntas de validação
+                      </h3>
+                      {Object.keys(aiAnswers).length > 0 && (
+                        <span className="text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                          ✓ {Object.keys(aiAnswers).length}/{aiQuestions.length}{" "}
+                          respondidas
+                        </span>
+                      )}
+                    </div>
+                    {Object.keys(aiAnswers).length === aiQuestions.length && (
+                      <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                        ✅ Você já respondeu todas as perguntas! Pode revisar e
+                        salvar novamente ou manter as respostas atuais.
+                      </div>
+                    )}
                     <div className="space-y-3">
                       {aiQuestions.map((q, idx) => (
                         <div key={idx}>

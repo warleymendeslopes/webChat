@@ -1,7 +1,7 @@
 import { getCollection } from '@/lib/mongodb';
 import { NextRequest, NextResponse } from 'next/server';
 
-// POST - alterna enabled (somente se status === 'active')
+// POST - alterna enabled (verifica requisitos mínimos)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -12,20 +12,38 @@ export async function POST(request: NextRequest) {
     }
 
     const collection = await getCollection('aiConfigs');
-    const config = await collection.findOne({ companyId });
+    const config = await collection.findOne({ companyId }) as any;
 
     if (!config) {
       return NextResponse.json({ error: 'Config not found' }, { status: 404 });
     }
 
-    if (config.status !== 'active' && enabled) {
-      return NextResponse.json({ error: 'Config not active' }, { status: 400 });
+    // Se está tentando ativar, verificar requisitos mínimos
+    if (enabled) {
+      const hasApiKey = !!(config.aiApiKey);
+      const hasContext = !!(config.context && config.context.trim().length > 0);
+      
+      console.log('🔍 Verificando requisitos para ativar AI:', {
+        hasApiKey,
+        hasContext,
+        status: config.status,
+      });
+
+      if (!hasApiKey) {
+        return NextResponse.json({ error: 'Chave de API não configurada. Configure a chave primeiro.' }, { status: 400 });
+      }
+
+      if (!hasContext) {
+        return NextResponse.json({ error: 'Contexto não configurado. Preencha o contexto da empresa.' }, { status: 400 });
+      }
     }
 
     await collection.updateOne(
       { companyId },
       { $set: { enabled: !!enabled, updatedAt: new Date() } }
     );
+
+    console.log(`✅ AI ${enabled ? 'ativada' : 'desativada'} para companyId: ${companyId}`);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

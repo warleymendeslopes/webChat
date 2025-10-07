@@ -125,11 +125,45 @@ async function handleIncomingMessage(message: any, metadata: any) {
       return;
     }
 
-    const ai = generateSeniorSalesReply({
+    // Busca a chave da API do aiConfig
+    const apiKey = (aiConfig as any)?.aiApiKey || '';
+    
+    // Se não tiver API key, não ativa o agente AI
+    if (!apiKey || apiKey.trim().length === 0) {
+      console.log('⚠️ AI não pode ser ativado - nenhuma API key configurada');
+      await writeAiLog({
+        companyId: companyMapping.companyId,
+        chatId,
+        customerPhone: phoneNumber,
+        inboundMessage: messageText,
+        action: 'skip',
+        meta: { reason: 'no_api_key' },
+      });
+      return;
+    }
+
+    console.log('🔑 API Key encontrada, chamando Gemini...');
+
+    const ai = await generateSeniorSalesReply({
       context: aiConfig.context || '',
       qna: aiConfig.qna || [],
       customerMessage: messageText,
+      apiKey: apiKey,
     });
+
+    // Se a função retornou null (erro no Gemini), deixa para atendente humano
+    if (!ai) {
+      console.log('⚠️ Gemini não respondeu - deixando para atendente humano');
+      await writeAiLog({
+        companyId: companyMapping.companyId,
+        chatId,
+        customerPhone: phoneNumber,
+        inboundMessage: messageText,
+        action: 'handoff_human',
+        meta: { reason: 'gemini_error' },
+      });
+      return;
+    }
 
     // 🔍 LOG DETALHADO
     console.log('🤖 AI gerou resposta:', {

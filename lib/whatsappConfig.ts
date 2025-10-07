@@ -44,6 +44,7 @@ export async function getAiConfig(companyId: string) {
   try {
     const collection = await getCollection('aiConfigs');
     const ai = await collection.findOne({ companyId });
+    // Retorna o aiConfig completo, incluindo a aiApiKey
     return ai || null;
   } catch (error) {
     console.error('Error fetching AI config:', error);
