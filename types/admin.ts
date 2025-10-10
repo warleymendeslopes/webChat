@@ -11,7 +11,7 @@ export interface WebChatConfig {
 }
 
 export interface AppUser {
-  _id?: string;
+  _id: string;
   firebaseAuthUid: string;
   email: string;
   name: string;

@@ -1,23 +1,33 @@
-import { getCollection } from '@/lib/mongodb';
+import { authService } from '@/lib/auth-service';
+import {
+  createUser,
+  getUserById,
+  getUsersByCompany,
+  updateUser
+} from '@/lib/mongodb-users';
 import { AppUser } from '@/types/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET - Listar usuários da empresa
 export async function GET(request: NextRequest) {
   try {
+    // Validate admin permissions
+    const authUser = await authService.validateRequest(request);
+    if (!authUser || !authUser.permissions.canManageUsers) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
-    const companyId = searchParams.get('companyId');
+    const companyId = searchParams.get('companyId') || authUser.companyId;
 
     if (!companyId) {
       return NextResponse.json({ error: 'CompanyId required' }, { status: 400 });
     }
 
-    const collection = await getCollection('appUsers');
-    const users = await collection
-      .find({ companyId, isActive: true })
-      .sort({ createdAt: -1 })
-      .toArray();
-
+    const users = await getUsersByCompany(companyId);
     return NextResponse.json({ users });
   } catch (error: any) {
     console.error('Error fetching users:', error);
@@ -28,10 +38,19 @@ export async function GET(request: NextRequest) {
 // POST - Criar novo usuário/atendente
 export async function POST(request: NextRequest) {
   try {
+    // Validate admin permissions
+    const authUser = await authService.validateRequest(request);
+    if (!authUser || !authUser.permissions.canManageUsers) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { firebaseAuthUid, email, name, role, companyId } = body;
 
-    if (!firebaseAuthUid || !email || !name || !role || !companyId) {
+    if (!firebaseAuthUid || !email || !name || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -39,30 +58,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 
-    const collection = await getCollection('appUsers');
-
-    // Verificar se usuário já existe
-    const existing = await collection.findOne({ firebaseAuthUid });
-    if (existing) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 409 });
+    const userCompanyId = companyId || authUser.companyId;
+    if (!userCompanyId) {
+      return NextResponse.json({ error: 'CompanyId required' }, { status: 400 });
     }
 
-    const user: Omit<AppUser, '_id'> = {
+    const userData: Omit<AppUser, '_id'> = {
       firebaseAuthUid,
       email,
       name,
       role,
-      companyId,
+      companyId: userCompanyId,
       createdAt: new Date(),
       isActive: true,
-    } as Omit<AppUser, '_id'>;
+    };
 
-    // Cast to any to satisfy Mongo's OptionalId<Document> typing
-    await collection.insertOne(user as any);
+    const userId = await createUser(userData);
 
     return NextResponse.json({
       success: true,
       message: 'User created successfully',
+      userId,
     });
   } catch (error: any) {
     console.error('Error creating user:', error);
@@ -73,6 +89,15 @@ export async function POST(request: NextRequest) {
 // DELETE - Desativar usuário
 export async function DELETE(request: NextRequest) {
   try {
+    // Validate admin permissions
+    const authUser = await authService.validateRequest(request);
+    if (!authUser || !authUser.permissions.canManageUsers) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
@@ -80,13 +105,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'UserId required' }, { status: 400 });
     }
 
-    const collection = await getCollection('appUsers');
-    await collection.updateOne(
-      { firebaseAuthUid: userId },
-      { $set: { isActive: false } }
-    );
+    // Check if user exists and belongs to same company
+    const user = await getUserById(userId);
+    if (!user || user.companyId !== authUser.companyId) {
+      return NextResponse.json({ error: 'User not found or unauthorized' }, { status: 404 });
+    }
 
-    return NextResponse.json({ success: true });
+    await updateUser(userId, { isActive: false });
+
+    return NextResponse.json({ 
+      success: true,
+      message: 'User deactivated successfully' 
+    });
   } catch (error: any) {
     console.error('Error deleting user:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

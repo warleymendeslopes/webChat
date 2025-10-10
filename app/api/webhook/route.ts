@@ -15,12 +15,41 @@ export async function GET(request: NextRequest) {
 
   const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
-  if (mode === 'subscribe' && token === verifyToken) {
-    console.log('Webhook verified');
-    return new NextResponse(challenge, { status: 200 });
+  // Debug logs
+  console.log('=== WEBHOOK VERIFICATION DEBUG ===');
+  console.log('Mode:', mode);
+  console.log('Token received:', token);
+  console.log('Token expected:', verifyToken);
+  console.log('Challenge:', challenge);
+  console.log('URL:', request.url);
+  console.log('================================');
+
+  // Check if verify token is configured
+  if (!verifyToken) {
+    console.error('WHATSAPP_VERIFY_TOKEN not configured');
+    return NextResponse.json({ error: 'Verify token not configured' }, { status: 500 });
   }
 
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Check if mode is subscribe
+  if (mode !== 'subscribe') {
+    console.error('Invalid mode:', mode);
+    return NextResponse.json({ error: 'Invalid mode' }, { status: 400 });
+  }
+
+  // Check if token matches
+  if (token !== verifyToken) {
+    console.error('Token mismatch. Received:', token, 'Expected:', verifyToken);
+    return NextResponse.json({ error: 'Token mismatch' }, { status: 403 });
+  }
+
+  // Check if challenge is provided
+  if (!challenge) {
+    console.error('No challenge provided');
+    return NextResponse.json({ error: 'No challenge' }, { status: 400 });
+  }
+
+  console.log('✅ Webhook verified successfully');
+  return new NextResponse(challenge, { status: 200 });
 }
 
 // Webhook handler (POST)

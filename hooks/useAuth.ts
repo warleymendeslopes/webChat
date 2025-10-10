@@ -1,12 +1,13 @@
 'use client';
 
+import { authService, AuthUser } from '@/lib/auth-service';
 import { auth } from '@/lib/firebase';
-import { getOrCreateUserByAuthUid, updateUserStatusByAuthUid } from '@/lib/firestore';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 
 export function useAuth() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [firestoreUserId, setFirestoreUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -15,33 +16,36 @@ export function useAuth() {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        // Create or get Firestore user linked to this Firebase Auth user
-        const userId = await getOrCreateUserByAuthUid(firebaseUser.uid, {
-          name: firebaseUser.displayName || undefined,
-          email: firebaseUser.email || undefined,
-          phoneNumber: firebaseUser.phoneNumber || undefined,
-        });
-        setFirestoreUserId(userId);
-        
-        // Update user online status
-        await updateUserStatusByAuthUid(firebaseUser.uid, true);
-
-        // Set offline on window close
-        window.addEventListener('beforeunload', () => {
-          updateUserStatusByAuthUid(firebaseUser.uid, false);
-        });
-        
-        setLoading(false);
+        try {
+          // Authenticate user with MongoDB
+          const authenticatedUser = await authService.authenticateUser(firebaseUser);
+          
+          if (authenticatedUser) {
+            setAuthUser(authenticatedUser);
+            setFirestoreUserId(authenticatedUser._id);
+          } else {
+            console.warn('User not found in MongoDB or inactive');
+            setAuthUser(null);
+            setFirestoreUserId(null);
+          }
+        } catch (error) {
+          console.error('Authentication error:', error);
+          setAuthUser(null);
+          setFirestoreUserId(null);
+        }
       } else {
+        setAuthUser(null);
         setFirestoreUserId(null);
-        setLoading(false);
+        authService.logout();
       }
+      
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  return { user, loading, firestoreUserId };
+  return { user, authUser, loading, firestoreUserId };
 }
 
 

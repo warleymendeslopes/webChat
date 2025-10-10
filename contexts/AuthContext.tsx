@@ -1,10 +1,7 @@
 "use client";
 
+import { authService, AuthUser } from "@/lib/auth-service";
 import { auth } from "@/lib/firebase";
-import {
-  getOrCreateUserByAuthUid,
-  updateUserStatusByAuthUid,
-} from "@/lib/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 import {
   createContext,
@@ -16,18 +13,21 @@ import {
 
 interface AuthContextType {
   user: User | null;
+  authUser: AuthUser | null;
   loading: boolean;
   firestoreUserId: string | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  authUser: null,
   loading: true,
   firestoreUserId: null,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [firestoreUserId, setFirestoreUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,40 +36,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        // Create or get Firestore user linked to this Firebase Auth user
-        const userId = await getOrCreateUserByAuthUid(firebaseUser.uid, {
-          name: firebaseUser.displayName || undefined,
-          email: firebaseUser.email || undefined,
-          phoneNumber: firebaseUser.phoneNumber || undefined,
-        });
-        setFirestoreUserId(userId);
+        try {
+          // Authenticate user with MongoDB
+          const authenticatedUser = await authService.authenticateUser(
+            firebaseUser
+          );
 
-        // Update user online status
-        await updateUserStatusByAuthUid(firebaseUser.uid, true);
-
-        // Set offline on window close
-        const handleBeforeUnload = () => {
-          updateUserStatusByAuthUid(firebaseUser.uid, false);
-        };
-
-        window.addEventListener("beforeunload", handleBeforeUnload);
-
-        setLoading(false);
-
-        return () => {
-          window.removeEventListener("beforeunload", handleBeforeUnload);
-        };
+          if (authenticatedUser) {
+            setAuthUser(authenticatedUser);
+            setFirestoreUserId(authenticatedUser._id);
+          } else {
+            console.warn("User not found in MongoDB or inactive");
+            setAuthUser(null);
+            setFirestoreUserId(null);
+          }
+        } catch (error) {
+          console.error("Authentication error:", error);
+          setAuthUser(null);
+          setFirestoreUserId(null);
+        }
       } else {
+        setAuthUser(null);
         setFirestoreUserId(null);
-        setLoading(false);
+        authService.logout();
       }
+
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, firestoreUserId }}>
+    <AuthContext.Provider value={{ user, authUser, loading, firestoreUserId }}>
       {children}
     </AuthContext.Provider>
   );
