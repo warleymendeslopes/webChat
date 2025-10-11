@@ -24,6 +24,8 @@ export interface AuthUser {
 export class AuthService {
   private static instance: AuthService;
   private currentUser: AuthUser | null = null;
+  private authenticatingUsers: Set<string> = new Set();
+  private userCache: Map<string, AuthUser | null> = new Map();
 
   static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -33,6 +35,18 @@ export class AuthService {
   }
 
   async authenticateUser(firebaseUser: FirebaseUser): Promise<AuthUser | null> {
+    // Verificar cache primeiro
+    if (this.userCache.has(firebaseUser.uid)) {
+      return this.userCache.get(firebaseUser.uid) || null;
+    }
+
+    // Evitar múltiplas autenticações simultâneas do mesmo usuário
+    if (this.authenticatingUsers.has(firebaseUser.uid)) {
+      return null;
+    }
+
+    this.authenticatingUsers.add(firebaseUser.uid);
+
     try {
       // Call server API to get user data
       const response = await fetch('/api/auth/user', {
@@ -49,15 +63,20 @@ export class AuthService {
 
       if (!response.ok) {
         console.error('Failed to authenticate user:', response.statusText);
+        this.userCache.set(firebaseUser.uid, null);
         return null;
       }
 
       const { user } = await response.json();
       this.currentUser = user;
+      this.userCache.set(firebaseUser.uid, user);
       return user;
     } catch (error) {
       console.error('Authentication error:', error);
+      this.userCache.set(firebaseUser.uid, null);
       return null;
+    } finally {
+      this.authenticatingUsers.delete(firebaseUser.uid);
     }
   }
 
@@ -107,6 +126,8 @@ export class AuthService {
 
   logout(): void {
     this.currentUser = null;
+    this.userCache.clear();
+    this.authenticatingUsers.clear();
   }
 
   // Middleware helper for API routes
@@ -115,13 +136,14 @@ export class AuthService {
       // Get Firebase token from request
       const authHeader = request.headers.get('authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.warn('No authorization header found');
         return null;
       }
 
       const token = authHeader.split('Bearer ')[1];
       
+      // TODO: Implement proper Firebase Admin SDK token verification
       // For now, we'll use a simple approach without firebase-admin
-      // In production, you should implement proper token verification
       console.warn('Token validation not implemented - using mock validation');
       
       // Return mock user for now

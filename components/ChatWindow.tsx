@@ -1,5 +1,6 @@
 "use client";
 
+import { playBeep } from "@/lib/audioUtils";
 import {
   setChatAiControl,
   subscribeToChat,
@@ -31,27 +32,6 @@ export default function ChatWindow({
   const [aiControl, setAiControl] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef<number>(0);
-
-  function playBeep() {
-    try {
-      const AudioCtx =
-        (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioCtx();
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-      oscillator.start();
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
-      oscillator.stop(ctx.currentTime + 0.18);
-    } catch (_) {
-      // ignore audio errors
-    }
-  }
 
   useEffect(() => {
     const unsubscribe = subscribeToMessages(chatId, (updatedMessages) => {

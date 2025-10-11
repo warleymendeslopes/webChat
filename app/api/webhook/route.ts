@@ -101,10 +101,17 @@ async function handleIncomingMessage(message: any, metadata: any) {
     return;
   }
 
+  // Get company mapping first to ensure proper isolation
+  const companyMapping = await getCompanyByPhoneNumberId(phoneNumberId);
+  if (!companyMapping) {
+    console.error('No company mapping found for phoneNumberId:', phoneNumberId);
+    return;
+  }
+
   // Create or get chat with attendant user
-  // Mark as WhatsApp chat so ALL attendants can see it
+  // Mark as WhatsApp chat but ISOLATED BY COMPANY
   const attendantUserId = await getOrCreateAttendant();
-  const chatId = await getOrCreateChat([user.id, attendantUserId], true);
+  const chatId = await getOrCreateChat([user.id, attendantUserId], true, companyMapping.companyId);
 
   // Save message to Firestore
   const messageId = await sendMessage({
@@ -131,11 +138,7 @@ async function handleIncomingMessage(message: any, metadata: any) {
       console.log('AI: no phoneNumberId in metadata');
       return;
     }
-    const companyMapping = await getCompanyByPhoneNumberId(phoneNumberId);
-    if (!companyMapping) {
-      console.log('AI: no company mapping for phoneNumberId', phoneNumberId);
-      return;
-    }
+    // companyMapping já foi obtido acima
     const aiConfig = await getAiConfig(companyMapping.companyId);
     if (!aiConfig) {
       console.log('AI: no aiConfig for company', companyMapping.companyId);

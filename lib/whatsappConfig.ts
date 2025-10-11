@@ -6,7 +6,22 @@ export async function getWhatsAppConfig(companyId: string) {
     const config = await collection.findOne({ companyId, isActive: true });
 
     if (!config) {
-      throw new Error('WhatsApp configuration not found');
+      // Fallback para variáveis de ambiente
+      console.log('⚠️ WhatsApp config not found in MongoDB, using environment variables');
+      
+      const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+      const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+      const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+
+      if (!phoneNumberId || !accessToken || !verifyToken) {
+        throw new Error('WhatsApp configuration not found in database and environment variables not set');
+      }
+
+      return {
+        phoneNumberId,
+        accessToken,
+        verifyToken,
+      };
     }
 
     return {

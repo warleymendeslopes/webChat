@@ -2,6 +2,8 @@
 
 import ChatList from "@/components/ChatList";
 import ChatWindow from "@/components/ChatWindow";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import SafeRedirect from "@/components/SafeRedirect";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { auth } from "@/lib/firebase";
@@ -10,7 +12,7 @@ import { signOut } from "firebase/auth";
 import { LogOut, Menu, MessageCircle, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function Home() {
   const router = useRouter();
@@ -20,18 +22,27 @@ export default function Home() {
   const [recipientPhone, setRecipientPhone] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Redirecionar baseado no role
-  useEffect(() => {
-    if (authLoading || roleLoading) return;
+  const loading = authLoading || roleLoading;
 
-    if (!user) {
-      // Não logado - redirecionar para login
-      router.push("/login");
-    } else if (user && role === null) {
-      // Logado mas não cadastrado - redirecionar para login (deixar escolher criar empresa)
-      router.push("/login");
-    }
-  }, [user, role, authLoading, roleLoading, router]);
+  // Evitar renderização desnecessária
+  const shouldRender =
+    !loading &&
+    user &&
+    firestoreUserId &&
+    role &&
+    companyId &&
+    companyId !== null;
+
+  // Debug logs para identificar problemas
+  console.log("Debug - shouldRender:", shouldRender, {
+    loading,
+    user: !!user,
+    firestoreUserId: !!firestoreUserId,
+    role,
+    companyId,
+    authLoading,
+    roleLoading,
+  });
 
   const handleLogout = async () => {
     try {
@@ -54,19 +65,22 @@ export default function Home() {
     }
   };
 
-  const loading = authLoading || roleLoading;
-
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
-      </div>
-    );
+    return <LoadingSpinner message="Carregando chat..." />;
+  }
+
+  // Redirecionamentos seguros
+  if (!user) {
+    return <SafeRedirect to="/login" condition={true} loading={loading} />;
+  }
+
+  if (user && role === null && !roleLoading) {
+    return <SafeRedirect to="/login" condition={true} loading={loading} />;
   }
 
   // Se não tem user, role ou companyId, está sendo redirecionado
-  if (!user || !firestoreUserId || !role || !companyId) {
-    return null;
+  if (!shouldRender) {
+    return <LoadingSpinner message="Carregando dados do usuário..." />;
   }
 
   // Apenas admin e attendant podem acessar o chat
@@ -94,35 +108,13 @@ export default function Home() {
         </div>
         <div className="flex items-center space-x-4">
           {role === "admin" && (
-            <>
-              <Link
-                href="/admin"
-                className="hidden sm:flex items-center space-x-2 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors"
-              >
-                <Settings size={20} />
-                <span className="text-sm">Admin</span>
-              </Link>
-              <Link
-                href="/webhook-info"
-                className="hidden sm:flex items-center space-x-2 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors"
-                title="Informações do Webhook"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                  />
-                </svg>
-                <span className="text-sm">Webhook</span>
-              </Link>
-            </>
+            <Link
+              href="/admin"
+              className="hidden sm:flex items-center space-x-2 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors"
+            >
+              <Settings size={20} />
+              <span className="text-sm">Admin</span>
+            </Link>
           )}
           <div className="hidden sm:flex items-center space-x-2">
             <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
@@ -165,11 +157,14 @@ export default function Home() {
           <div className="p-4 border-b border-gray-300">
             <h2 className="text-xl font-semibold text-gray-900">Conversas</h2>
           </div>
-          <ChatList
-            userId={firestoreUserId}
-            onSelectChat={handleSelectChat}
-            selectedChatId={selectedChatId || undefined}
-          />
+          {companyId && (
+            <ChatList
+              userId={firestoreUserId}
+              companyId={companyId}
+              onSelectChat={handleSelectChat}
+              selectedChatId={selectedChatId || undefined}
+            />
+          )}
         </aside>
 
         {/* Chat Window */}

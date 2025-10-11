@@ -5,6 +5,7 @@ import {
   collection,
   doc,
   limit as fbLimit,
+  getDoc,
   getDocs,
   increment,
   onSnapshot,
@@ -63,13 +64,14 @@ export async function updateUserStatusByAuthUid(firebaseAuthUid: string, isOnlin
 }
 
 // Chats
-export async function createChat(participants: string[], isWhatsAppChat: boolean = false) {
+export async function createChat(participants: string[], isWhatsAppChat: boolean = false, companyId?: string) {
   const chatRef = await addDoc(collection(db, 'chats'), {
     participants,
     createdAt: serverTimestamp(),
     lastMessageTimestamp: serverTimestamp(),
     unreadCount: participants.reduce((acc, id) => ({ ...acc, [id]: 0 }), {}),
     isWhatsAppChat,
+    companyId, // CRÍTICO: Isolamento por empresa
   });
   return chatRef.id;
 }
@@ -97,12 +99,12 @@ export async function findChatByParticipants(participants: string[]) {
   return null;
 }
 
-export async function getOrCreateChat(participants: string[], isWhatsAppChat: boolean = false) {
+export async function getOrCreateChat(participants: string[], isWhatsAppChat: boolean = false, companyId?: string) {
   const existingChat = await findChatByParticipants(participants);
   if (existingChat) {
     return existingChat.id;
   }
-  return await createChat(participants, isWhatsAppChat);
+  return await createChat(participants, isWhatsAppChat, companyId);
 }
 
 // Increment unread for a recipient when a new message arrives
@@ -205,17 +207,18 @@ export async function getMessagesSince(chatId: string, since: Date, max: number 
   });
 }
 
-export function subscribeToChats(userId: string, callback: (chats: Chat[]) => void) {
+export function subscribeToChats(userId: string, companyId: string, callback: (chats: Chat[]) => void) {
   // Query 1: Chats onde o usuário é participante (privados)
   const privateChatsQuery = query(
     collection(db, 'chats'),
     where('participants', 'array-contains', userId)
   );
 
-  // Query 2: Chats do WhatsApp (públicos para todos atendentes)
+  // Query 2: Chats do WhatsApp (FILTRADOS POR EMPRESA)
   const whatsappChatsQuery = query(
     collection(db, 'chats'),
-    where('isWhatsAppChat', '==', true)
+    where('isWhatsAppChat', '==', true),
+    where('companyId', '==', companyId) // CRÍTICO: Isolamento por empresa
   );
 
   // Combine results from both queries
@@ -320,45 +323,25 @@ export async function linkFirebaseAuthToUser(firestoreUserId: string, firebaseAu
   });
 }
 
-// Get or create user by Firebase Auth UID (for logged in users)
-export async function getOrCreateUserByAuthUid(
-  firebaseAuthUid: string,
-  userData: { name?: string; email?: string; phoneNumber?: string }
-) {
-  const q = query(collection(db, 'users'), where('firebaseAuthUid', '==', firebaseAuthUid));
-  const querySnapshot = await getDocs(q);
-  
-  if (!querySnapshot.empty) {
-    return querySnapshot.docs[0].id;
-  }
-  
-  // Create new user
-  const userRef = await addDoc(collection(db, 'users'), {
-    firebaseAuthUid,
-    name: userData.name || userData.email || 'Atendente',
-    phoneNumber: userData.phoneNumber || '',
-    email: userData.email || '',
-    isOnline: true,
-    createdAt: serverTimestamp(),
-    lastSeen: serverTimestamp(),
-  });
-  
-  return userRef.id;
-}
 
-// Get user by ID
+// Get user by ID - OPTIMIZED
 export async function getUserById(userId: string) {
-  const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', userId)));
-  
-  if (userDoc.empty) {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      return null;
+    }
+    
+    return {
+      id: userSnap.id,
+      ...userSnap.data(),
+    } as User;
+  } catch (error) {
+    console.error('Error getting user by ID:', error);
     return null;
   }
-  
-  const data = userDoc.docs[0].data();
-  return {
-    id: userDoc.docs[0].id,
-    ...data,
-  } as User;
 }
 
 // Normalize Brazilian phone number (add missing digit 9 for mobile)
@@ -383,37 +366,44 @@ function normalizeBrazilianPhone(phone: string): string {
   return digits;
 }
 
-// Get chat recipient phone number (for WhatsApp chats)
+// Get chat recipient phone number (for WhatsApp chats) - OPTIMIZED
 export async function getChatRecipientPhone(chatId: string, currentUserId: string): Promise<string> {
-  // Get chat
-  const chatDoc = await getDocs(query(collection(db, 'chats'), where('__name__', '==', chatId)));
-  
-  if (chatDoc.empty) {
+  try {
+    // Get chat
+    const chatRef = doc(db, 'chats', chatId);
+    const chatSnap = await getDoc(chatRef);
+    
+    if (!chatSnap.exists()) {
+      return '';
+    }
+    
+    const chatData = chatSnap.data();
+    const participants = chatData.participants as string[];
+    
+    // Find the participant that is NOT the current user
+    const recipientId = participants.find(id => id !== currentUserId);
+    
+    if (!recipientId) {
+      return '';
+    }
+    
+    // Get recipient user data
+    const recipientRef = doc(db, 'users', recipientId);
+    const recipientSnap = await getDoc(recipientRef);
+    
+    if (!recipientSnap.exists()) {
+      return '';
+    }
+    
+    const recipientData = recipientSnap.data();
+    const rawPhone = recipientData.phoneNumber || '';
+    
+    // Normalize Brazilian phone numbers
+    return normalizeBrazilianPhone(rawPhone);
+  } catch (error) {
+    console.error('Error getting chat recipient phone:', error);
     return '';
   }
-  
-  const chatData = chatDoc.docs[0].data();
-  const participants = chatData.participants as string[];
-  
-  // Find the participant that is NOT the current user
-  const recipientId = participants.find(id => id !== currentUserId);
-  
-  if (!recipientId) {
-    return '';
-  }
-  
-  // Get recipient user data
-  const recipientDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', recipientId)));
-  
-  if (recipientDoc.empty) {
-    return '';
-  }
-  
-  const recipientData = recipientDoc.docs[0].data();
-  const rawPhone = recipientData.phoneNumber || '';
-  
-  // Normalize Brazilian phone numbers
-  return normalizeBrazilianPhone(rawPhone);
 }
 
 export function subscribeToChat(chatId: string, callback: (chat: Chat | null) => void) {

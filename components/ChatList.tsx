@@ -1,5 +1,6 @@
 "use client";
 
+import { playNotificationSound } from "@/lib/audioUtils";
 import { subscribeToChats } from "@/lib/firestore";
 import { Chat } from "@/types";
 import { format } from "date-fns";
@@ -8,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface ChatListProps {
   userId: string;
+  companyId: string; // CRÍTICO: Isolamento por empresa
   onSelectChat: (chatId: string) => void | Promise<void>;
   selectedChatId?: string;
   viewedChatIds?: string[];
@@ -15,6 +17,7 @@ interface ChatListProps {
 
 export default function ChatList({
   userId,
+  companyId,
   onSelectChat,
   selectedChatId,
   viewedChatIds,
@@ -23,30 +26,8 @@ export default function ChatList({
   const [loading, setLoading] = useState(true);
   const prevUnreadRef = useRef<Record<string, number>>({});
 
-  function playBeep() {
-    try {
-      const AudioCtx =
-        (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioCtx();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.value = 880;
-      o.connect(g);
-      g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-      o.start();
-      // Stop after 160ms
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
-      o.stop(ctx.currentTime + 0.18);
-    } catch (e) {
-      // ignore audio errors
-    }
-  }
-
   useEffect(() => {
-    const unsubscribe = subscribeToChats(userId, (updatedChats) => {
+    const unsubscribe = subscribeToChats(userId, companyId, (updatedChats) => {
       // Sort: unread first, then by last message desc
       const sorted = [...updatedChats].sort((a, b) => {
         const aUnread = (a.unreadCount && a.unreadCount[userId]) || 0;
@@ -73,12 +54,8 @@ export default function ChatList({
       }
       prevUnreadRef.current = nextMap;
 
-      if (
-        shouldBeep &&
-        typeof document !== "undefined" &&
-        document.visibilityState !== "visible"
-      ) {
-        playBeep();
+      if (shouldBeep) {
+        playNotificationSound();
       }
 
       setChats(sorted);
@@ -86,7 +63,7 @@ export default function ChatList({
     });
 
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, companyId]);
 
   if (loading) {
     return (

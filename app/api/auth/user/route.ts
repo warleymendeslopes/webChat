@@ -1,6 +1,4 @@
 import {
-    createCompany,
-    createUser,
     getUserByFirebaseAuthUid
 } from '@/lib/mongodb-users';
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,46 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user data from MongoDB
-    let userData = await getUserByFirebaseAuthUid(firebaseAuthUid);
-    
-    // If user doesn't exist, create a new one
-    if (!userData) {
-      console.log('User not found in MongoDB, creating new user:', firebaseAuthUid);
-      
-      // Create default company first
-      const defaultCompanyId = await createCompany({
-        name: 'Empresa Padrão',
-        settings: {
-          timezone: 'America/Sao_Paulo',
-          businessHours: {
-            start: '09:00',
-            end: '18:00',
-            days: [1, 2, 3, 4, 5]
-          },
-          features: {
-            aiEnabled: true,
-            whatsappEnabled: true,
-            analyticsEnabled: true
-          }
-        },
-        adminUsers: [],
-        attendantUsers: [],
-        isActive: true
-      });
-
-      // Create new user
-      const userId = await createUser({
-        firebaseAuthUid,
-        email: email || '',
-        name: name || 'Usuário',
-        role: 'admin', // First user is admin
-        companyId: defaultCompanyId,
-        isActive: true,
-      });
-
-      // Get the created user
-      userData = await getUserByFirebaseAuthUid(firebaseAuthUid);
-    }
+    const userData = await getUserByFirebaseAuthUid(firebaseAuthUid);
     
     if (!userData || !userData.isActive) {
       return NextResponse.json({ error: 'User not found or inactive' }, { status: 404 });

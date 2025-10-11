@@ -1,6 +1,7 @@
 "use client";
 
 import AuthForm from "@/components/AuthForm";
+import SafeRedirect from "@/components/SafeRedirect";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import Link from "next/link";
@@ -17,7 +18,6 @@ export default function LoginPage() {
     inviteCompanyId,
     loading: roleLoading,
   } = roleData;
-
   // Toast notifications
   const [toast, setToast] = useState<{
     type: "success" | "error" | "info";
@@ -65,10 +65,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (authLoading || roleLoading) return;
 
-    if (user && role) {
-      // Usuário já cadastrado - redirecionar para chat
-      router.push("/");
-    } else if (user && role === null && hasPendingInvite && inviteCompanyId) {
+    if (user && role === null && hasPendingInvite && inviteCompanyId) {
       // Tem convite pendente - aceitar automaticamente
       acceptInvite();
     }
@@ -79,7 +76,6 @@ export default function LoginPage() {
     roleLoading,
     hasPendingInvite,
     inviteCompanyId,
-    router,
     acceptInvite,
   ]);
 
@@ -88,6 +84,17 @@ export default function LoginPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
       </div>
+    );
+  }
+
+  // Redirecionamento seguro para usuários já cadastrados
+  if (user && role && role !== null) {
+    return (
+      <SafeRedirect
+        to="/"
+        condition={true}
+        loading={authLoading || roleLoading}
+      />
     );
   }
 
