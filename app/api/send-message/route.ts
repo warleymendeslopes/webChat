@@ -1,3 +1,4 @@
+import { updateChatActivity } from '@/lib/chatDistribution';
 import { sendMessage, updateMessageStatus } from '@/lib/firestore';
 import { sendWhatsAppMedia, sendWhatsAppMessage } from '@/lib/whatsapp';
 import { getWhatsAppConfig } from '@/lib/whatsappConfig';
@@ -65,6 +66,14 @@ export async function POST(request: NextRequest) {
       whatsappMessageId: whatsappResponse.messages[0].id,
     });
     console.log('✅ Message saved to Firestore:', messageId);
+
+    // 🆕 NOVO: Atualizar atividade do chat (mensagem do atendente)
+    try {
+      await updateChatActivity(chatId, false);
+    } catch (activityError) {
+      console.error('⚠️ Failed to update chat activity:', activityError);
+      // Não bloqueia o envio da mensagem
+    }
 
     // Update status to delivered
     setTimeout(async () => {

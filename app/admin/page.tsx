@@ -1,10 +1,11 @@
 "use client";
 
+import MetricsDashboard from "@/components/MetricsDashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
-import { Bot, LogOut, Settings, Users } from "lucide-react";
+import { BarChart3, Bot, LogOut, Settings, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -12,9 +13,9 @@ export default function AdminPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { role, companyId, loading: roleLoading } = useUserRole(user);
-  const [activeTab, setActiveTab] = useState<"config" | "users" | "ai">(
-    "config"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "config" | "users" | "ai" | "metrics"
+  >("metrics");
 
   // Redirecionar se não for admin
   useEffect(() => {
@@ -372,6 +373,17 @@ export default function AdminPage() {
             >
               <Bot size={20} />
               <span>Atendente AI</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("metrics")}
+              className={`${
+                activeTab === "metrics"
+                  ? "border-green-500 text-green-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              } flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              <BarChart3 size={20} />
+              <span>Métricas</span>
             </button>
           </nav>
         </div>
@@ -1058,6 +1070,16 @@ export default function AdminPage() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Metrics Tab */}
+        {activeTab === "metrics" && companyId && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Dashboard de Métricas
+            </h2>
+            <MetricsDashboard companyId={companyId} />
           </div>
         )}
       </div>

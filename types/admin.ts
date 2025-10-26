@@ -53,3 +53,46 @@ export interface AiConfig {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// Chat Assignment System
+export type ChatAssignmentStatus = 'new' | 'assigned' | 'active' | 'resolved' | 'expired';
+
+export interface ChatAssignment {
+  _id?: string;
+  chatId: string;
+  companyId: string;
+  assignedTo: string | null; // ID do atendente ou null se não atribuído
+  status: ChatAssignmentStatus;
+  assignedAt?: Date;
+  lastActivityAt: Date;
+  lastCustomerMessageAt?: Date; // Última mensagem DO cliente (para janela 24h)
+  lastAttendantMessageAt?: Date; // Última mensagem DO atendente
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Attendant Status System
+export type AttendantStatusType = 'available' | 'busy' | 'away' | 'offline';
+
+export interface AttendantStatus {
+  _id?: string;
+  userId: string;
+  companyId: string;
+  status: AttendantStatusType;
+  activeChats: number;
+  maxChats: number; // Limite de chats simultâneos
+  lastActivityAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Distribution Strategy
+export type DistributionStrategy = 'round_robin' | 'least_active' | 'balanced';
+
+export interface DistributionConfig {
+  companyId: string;
+  strategy: DistributionStrategy;
+  autoAssign: boolean; // Atribuir automaticamente novos chats
+  reassignAfterHours: number; // Reatribuir após X horas de inatividade
+  maxChatsPerAttendant: number;
+}

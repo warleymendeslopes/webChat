@@ -9,6 +9,7 @@ interface MessageInputProps {
   recipientPhone: string;
   companyId: string;
   disabled?: boolean;
+  disabledMessage?: string;
 }
 
 export default function MessageInput({
@@ -17,6 +18,7 @@ export default function MessageInput({
   recipientPhone,
   companyId,
   disabled = false,
+  disabledMessage,
 }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -148,7 +150,9 @@ export default function MessageInput({
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder={
-              disabled ? "IA no controle desta conversa" : "Digite uma mensagem"
+              disabled
+                ? disabledMessage || "Mensagens desabilitadas"
+                : "Digite uma mensagem"
             }
             disabled={isSending || disabled}
             className="w-full px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:border-green-500 pr-10 text-gray-900 placeholder:text-gray-400"

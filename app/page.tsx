@@ -1,5 +1,6 @@
 "use client";
 
+import AttendantStatusControl from "@/components/AttendantStatusControl";
 import ChatList from "@/components/ChatList";
 import ChatWindow from "@/components/ChatWindow";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -129,6 +130,15 @@ export default function Home() {
               </span>
             )}
           </div>
+
+          {/* Status Control for Attendants */}
+          {role === "attendant" && firestoreUserId && companyId && (
+            <AttendantStatusControl
+              userId={firestoreUserId}
+              companyId={companyId}
+            />
+          )}
+
           <button
             onClick={handleLogout}
             className="hover:bg-green-700 p-2 rounded-full transition-colors"

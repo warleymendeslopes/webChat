@@ -30,6 +30,8 @@ export default function ChatWindow({
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiControl, setAiControl] = useState<boolean>(false);
+  const [windowExpired, setWindowExpired] = useState<boolean>(false);
+  const [checkingWindow, setCheckingWindow] = useState<boolean>(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef<number>(0);
 
@@ -47,6 +49,29 @@ export default function ChatWindow({
       unsubscribe();
       unsubscribeChat();
     };
+  }, [chatId]);
+
+  // 🆕 NOVO: Verificar janela de 24h periodicamente
+  useEffect(() => {
+    const checkWindow = async () => {
+      try {
+        const response = await fetch(`/api/check-24h-window?chatId=${chatId}`);
+        const data = await response.json();
+        setWindowExpired(data.expired || false);
+        setCheckingWindow(false);
+      } catch (error) {
+        console.error("Error checking 24h window:", error);
+        setCheckingWindow(false);
+      }
+    };
+
+    // Verificar imediatamente
+    checkWindow();
+
+    // Verificar a cada 1 minuto
+    const interval = setInterval(checkWindow, 60000);
+
+    return () => clearInterval(interval);
   }, [chatId]);
 
   useEffect(() => {
@@ -145,6 +170,31 @@ export default function ChatWindow({
             </button>
           </div>
         )}
+
+        {/* 🆕 NOVO: Banner de janela de 24h expirada */}
+        {windowExpired && !aiControl && (
+          <div className="bg-red-50 border-b border-red-200 px-4 py-2">
+            <div className="flex items-center space-x-2">
+              <svg
+                className="w-5 h-5 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span className="text-red-900 text-sm font-medium">
+                ⏰ Janela de 24h expirada - Aguarde o cliente enviar uma nova
+                mensagem para poder responder
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -174,7 +224,14 @@ export default function ChatWindow({
         senderId={currentUserId}
         recipientPhone={recipientPhone}
         companyId={companyId}
-        disabled={aiControl}
+        disabled={aiControl || windowExpired}
+        disabledMessage={
+          aiControl
+            ? "IA está no controle desta conversa"
+            : windowExpired
+            ? "Janela de 24h expirada - aguarde mensagem do cliente"
+            : undefined
+        }
       />
     </div>
   );

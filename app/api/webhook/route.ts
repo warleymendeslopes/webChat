@@ -1,5 +1,6 @@
 import { writeAiLog } from '@/lib/aiLog';
 import { generateSeniorSalesReply } from '@/lib/aiResponder';
+import { distributeChat, getOrCreateChatAssignment, updateChatActivity } from '@/lib/chatDistribution';
 import { createUser, getMessagesSince, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage, setChatAiControl } from '@/lib/firestore';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { getAiConfig, getCompanyByPhoneNumberId } from '@/lib/whatsappConfig';
@@ -112,6 +113,28 @@ async function handleIncomingMessage(message: any, metadata: any) {
   // Mark as WhatsApp chat but ISOLATED BY COMPANY
   const attendantUserId = await getOrCreateAttendant();
   const chatId = await getOrCreateChat([user.id, attendantUserId], true, companyMapping.companyId);
+
+  // 🆕 NOVO: Gerenciar atribuição do chat
+  const assignment = await getOrCreateChatAssignment(
+    chatId,
+    companyMapping.companyId,
+    new Date() // Timestamp da mensagem do cliente
+  );
+
+  // 🆕 NOVO: Distribuir automaticamente se ainda não atribuído
+  if (!assignment.assignedTo) {
+    console.log(`📋 New chat detected, attempting automatic distribution...`);
+    const assignedAttendant = await distributeChat(chatId, companyMapping.companyId);
+    
+    if (assignedAttendant) {
+      console.log(`✅ Chat ${chatId} auto-assigned to attendant ${assignedAttendant}`);
+    } else {
+      console.warn(`⚠️ No available attendant for chat ${chatId}`);
+    }
+  }
+
+  // 🆕 NOVO: Atualizar atividade do chat (registrar mensagem do cliente)
+  await updateChatActivity(chatId, true);
 
   // Save message to Firestore
   const messageId = await sendMessage({

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'UID required' }, { status: 400 });
     }
 
-    const usersCollection = await getCollection('appUsers');
+    const usersCollection = await getCollection('users');
     const user = await usersCollection.findOne({ firebaseAuthUid, isActive: true });
 
     if (user) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const usersCollection = await getCollection('appUsers');
+    const usersCollection = await getCollection('users');
     
     // Verificar se já existe
     const existing = await usersCollection.findOne({ firebaseAuthUid });
@@ -75,18 +75,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already exists' }, { status: 409 });
     }
 
-    // Criar admin
+    // Criar admin com _id como string
     const user = {
       firebaseAuthUid,
-      email,
+      email: email.toLowerCase(),
       name,
-      role: 'admin',
+      role: 'admin' as const,
       companyId: firebaseAuthUid, // O primeiro admin usa seu UID como companyId
       createdAt: new Date(),
       isActive: true,
     };
 
-    await usersCollection.insertOne(user);
+    const result = await usersCollection.insertOne(user);
 
     // Criar configuração inicial da empresa
     const configCollection = await getCollection('webChatConfigs');
