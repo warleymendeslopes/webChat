@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import NewTemplateModal from "./NewTemplateModal";
 import TemplateStatusNotification from "./TemplateStatusNotification";
 
 interface TemplateManagerProps {
@@ -456,6 +457,19 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({
             Criar Template
           </button>
         </div>
+      )}
+
+      {/* Modal de Novo Template */}
+      {showNewTemplateModal && (
+        <NewTemplateModal
+          companyId={companyId}
+          userId={userId}
+          onClose={() => setShowNewTemplateModal(false)}
+          onSuccess={() => {
+            fetchData(); // Recarregar dados
+            setShowNewTemplateModal(false);
+          }}
+        />
       )}
 
       {/* Notificações de Status */}

@@ -79,6 +79,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('📝 Creating template with data:', {
+      companyId: !!body.companyId,
+      name: body.name,
+      category: body.category,
+      language: body.language,
+      componentsCount: body.components?.length,
+      buttonsCount: body.buttons?.length,
+      createdBy: !!body.createdBy,
+    });
+
     const {
       companyId,
       name,
@@ -92,6 +102,13 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!companyId || !name || !category || !language || !components) {
+      console.log('❌ Missing required fields:', {
+        companyId: !!companyId,
+        name: !!name,
+        category: !!category,
+        language: !!language,
+        components: !!components,
+      });
       return NextResponse.json(
         { error: 'companyId, name, category, language, and components are required' },
         { status: 400 }
@@ -107,7 +124,10 @@ export async function POST(request: NextRequest) {
       buttons,
     });
 
+    console.log('🔍 Template validation result:', validation);
+
     if (!validation.valid) {
+      console.log('❌ Template validation failed:', validation.errors);
       return NextResponse.json(
         { error: 'Template validation failed', details: validation.errors },
         { status: 400 }

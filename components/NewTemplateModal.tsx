@@ -133,6 +133,16 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log("📝 Submitting template form:", {
+      name: formData.name,
+      category: formData.category,
+      language: formData.language,
+      componentsCount: components.length,
+      buttonsCount: buttons.length,
+      companyId,
+      userId,
+    });
+
     if (!formData.name.trim()) {
       alert("Nome do template é obrigatório");
       return;
@@ -146,30 +156,39 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
     setLoading(true);
 
     try {
+      const requestBody = {
+        companyId,
+        name: formData.name,
+        category: formData.category,
+        language: formData.language,
+        components,
+        buttons: buttons.length > 0 ? buttons : undefined,
+        description: formData.description,
+        tags: formData.tags,
+        createdBy: userId,
+      };
+
+      console.log("📤 Sending request to API:", requestBody);
+
       const response = await fetch("/api/templates", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          companyId,
-          name: formData.name,
-          category: formData.category,
-          language: formData.language,
-          components,
-          buttons: buttons.length > 0 ? buttons : undefined,
-          description: formData.description,
-          tags: formData.tags,
-          createdBy: userId,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log("📥 API response status:", response.status);
+
       if (response.ok) {
+        const result = await response.json();
+        console.log("✅ Template created successfully:", result);
         alert("Template criado com sucesso!");
         onSuccess();
         onClose();
       } else {
         const error = await response.json();
+        console.log("❌ API error:", error);
         alert(`Erro: ${error.error}`);
       }
     } catch (error) {
@@ -223,7 +242,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-900"
                     placeholder="Ex: Boas-vindas"
                     required
                   />
@@ -241,7 +260,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                         category: e.target.value as any,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-900"
                   >
                     <option value="marketing">Marketing</option>
                     <option value="utility">Utilitário</option>
@@ -258,7 +277,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                     onChange={(e) =>
                       setFormData({ ...formData, language: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-900"
                   >
                     <option value="pt_BR">Português (Brasil)</option>
                     <option value="en_US">English (US)</option>
@@ -276,7 +295,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-900"
                     placeholder="Descrição opcional"
                   />
                 </div>
@@ -385,7 +404,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                             onChange={(e) =>
                               updateComponent(index, "format", e.target.value)
                             }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                           >
                             <option value="TEXT">Texto</option>
                             <option value="IMAGE">Imagem</option>
@@ -403,7 +422,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                             onChange={(e) =>
                               updateComponent(index, "text", e.target.value)
                             }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                             rows={2}
                             placeholder="Digite o texto do componente..."
                           />
@@ -433,7 +452,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                                           header_text: newExample,
                                         });
                                       }}
-                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                                       placeholder={`Exemplo ${i + 1}`}
                                     />
                                   )
@@ -492,7 +511,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                             onChange={(e) =>
                               updateButton(index, "type", e.target.value)
                             }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                           >
                             <option value="URL">URL</option>
                             <option value="PHONE_NUMBER">Telefone</option>
@@ -510,7 +529,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                             onChange={(e) =>
                               updateButton(index, "text", e.target.value)
                             }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                             placeholder="Texto do botão"
                           />
                         </div>
@@ -526,7 +545,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                               onChange={(e) =>
                                 updateButton(index, "url", e.target.value)
                               }
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                               placeholder="https://exemplo.com"
                             />
                           </div>
@@ -547,7 +566,7 @@ const NewTemplateModal: React.FC<NewTemplateModalProps> = ({
                                   e.target.value
                                 )
                               }
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900"
                               placeholder="+5511999999999"
                             />
                           </div>
