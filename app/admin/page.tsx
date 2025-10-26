@@ -5,7 +5,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
-import { BarChart3, Bot, LogOut, Settings, Users } from "lucide-react";
+import {
+  BarChart3,
+  Bot,
+  FileText,
+  LogOut,
+  Settings,
+  Users,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -14,7 +21,7 @@ export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const { role, companyId, loading: roleLoading } = useUserRole(user);
   const [activeTab, setActiveTab] = useState<
-    "config" | "users" | "ai" | "metrics"
+    "config" | "users" | "ai" | "metrics" | "templates"
   >("metrics");
 
   // Redirecionar se não for admin
@@ -373,6 +380,17 @@ export default function AdminPage() {
             >
               <Bot size={20} />
               <span>Atendente AI</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("templates")}
+              className={`${
+                activeTab === "templates"
+                  ? "border-green-500 text-green-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              } flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              <FileText size={20} />
+              <span>Templates</span>
             </button>
             <button
               onClick={() => setActiveTab("metrics")}
@@ -1070,6 +1088,54 @@ export default function AdminPage() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Templates Tab */}
+        {activeTab === "templates" && companyId && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Templates do Facebook
+            </h2>
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="font-semibold text-blue-900 mb-2">
+                  💡 Como funciona:
+                </h3>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>
+                    <strong>Crie templates</strong> de mensagens para WhatsApp
+                    Business
+                  </li>
+                  <li>
+                    <strong>Envie para aprovação</strong> do Facebook
+                    automaticamente
+                  </li>
+                  <li>
+                    <strong>Acompanhe o status</strong> de aprovação em tempo
+                    real
+                  </li>
+                  <li>
+                    <strong>Use templates aprovados</strong> nas suas campanhas
+                  </li>
+                </ul>
+              </div>
+              <div className="text-center py-8">
+                <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Gerenciador de Templates
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Acesse a página dedicada para gerenciar seus templates
+                </p>
+                <button
+                  onClick={() => router.push("/admin/templates")}
+                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
+                >
+                  Abrir Gerenciador de Templates
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

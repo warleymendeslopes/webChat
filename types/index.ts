@@ -71,4 +71,7 @@ export interface WhatsAppMessage {
   }>;
 }
 
+// Exportar tipos de templates
+export * from './templates';
+
 
