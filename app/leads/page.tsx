@@ -1,10 +1,10 @@
 "use client";
 
+import LeadAttendantInfo from "@/components/LeadAttendantInfo";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import NewLeadModal from "@/components/NewLeadModal";
 import SafeRedirect from "@/components/SafeRedirect";
-import { useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useAuthState } from "@/hooks/useAuthState";
 import { auth } from "@/lib/firebase";
 import { Lead, LeadStats, LeadStatus } from "@/types/leads";
 import { signOut } from "firebase/auth";
@@ -25,35 +25,40 @@ import { useEffect, useState } from "react";
 
 export default function LeadsPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-  const { role, companyId, loading: roleLoading } = useUserRole(user);
+  const { user, firestoreUserId, roleData, loading } = useAuthState();
+  const { role, companyId } = roleData;
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
 
-  const shouldRender =
-    !authLoading && !roleLoading && user && role && companyId;
+  const shouldRender = !loading && user && role && companyId;
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId || !role || !firestoreUserId) return;
 
     const fetchData = async () => {
       try {
-        // Buscar leads
+        setLoadingData(true);
+
+        // Buscar leads com filtro por atendente
         const statusParam =
           statusFilter !== "all" ? `&status=${statusFilter}` : "";
         const searchParam = searchTerm ? `&search=${searchTerm}` : "";
+        const roleParam = `&userRole=${role}`;
+        const userIdParam = `&userId=${firestoreUserId}`;
 
         const [leadsResponse, statsResponse] = await Promise.all([
           fetch(
-            `/api/leads?companyId=${companyId}${statusParam}${searchParam}`
+            `/api/leads?companyId=${companyId}${statusParam}${searchParam}${roleParam}${userIdParam}`
           ),
-          fetch(`/api/leads/stats?companyId=${companyId}`),
+          fetch(
+            `/api/leads/stats?companyId=${companyId}${roleParam}${userIdParam}`
+          ),
         ]);
 
         if (leadsResponse.ok) {
@@ -68,12 +73,12 @@ export default function LeadsPage() {
       } catch (error) {
         console.error("Error fetching leads:", error);
       } finally {
-        setLoading(false);
+        setLoadingData(false);
       }
     };
 
     fetchData();
-  }, [companyId, statusFilter, searchTerm]);
+  }, [companyId, role, firestoreUserId, statusFilter, searchTerm]);
 
   const handleLogout = async () => {
     try {
@@ -83,7 +88,7 @@ export default function LeadsPage() {
     }
   };
 
-  if (authLoading || roleLoading) {
+  if (loading) {
     return <LoadingSpinner message="Carregando..." />;
   }
 
@@ -93,6 +98,10 @@ export default function LeadsPage() {
 
   if (!shouldRender) {
     return <LoadingSpinner message="Carregando dados..." />;
+  }
+
+  if (loadingData) {
+    return <LoadingSpinner message="Carregando leads..." />;
   }
 
   const getStatusColor = (status: LeadStatus) => {
@@ -120,17 +129,23 @@ export default function LeadsPage() {
   };
 
   const handleRefreshLeads = async () => {
-    if (!companyId) return;
+    if (!companyId || !role || !firestoreUserId) return;
 
-    setLoading(true);
+    setLoadingData(true);
     try {
       const statusParam =
         statusFilter !== "all" ? `&status=${statusFilter}` : "";
       const searchParam = searchTerm ? `&search=${searchTerm}` : "";
+      const roleParam = `&userRole=${role}`;
+      const userIdParam = `&userId=${firestoreUserId}`;
 
       const [leadsResponse, statsResponse] = await Promise.all([
-        fetch(`/api/leads?companyId=${companyId}${statusParam}${searchParam}`),
-        fetch(`/api/leads/stats?companyId=${companyId}`),
+        fetch(
+          `/api/leads?companyId=${companyId}${statusParam}${searchParam}${roleParam}${userIdParam}`
+        ),
+        fetch(
+          `/api/leads/stats?companyId=${companyId}${roleParam}${userIdParam}`
+        ),
       ]);
 
       if (leadsResponse.ok) {
@@ -145,7 +160,7 @@ export default function LeadsPage() {
     } catch (error) {
       console.error("Error refreshing leads:", error);
     } finally {
-      setLoading(false);
+      setLoadingData(false);
     }
   };
 
@@ -167,7 +182,19 @@ export default function LeadsPage() {
             <ArrowLeft size={24} />
           </Link>
           <Users size={28} />
-          <h1 className="text-xl font-semibold">Leads & Contatos</h1>
+          <div>
+            <h1 className="text-xl font-semibold">Leads & Contatos</h1>
+            {role === "attendant" && (
+              <p className="text-sm text-green-200">
+                📋 Visualizando apenas seus leads
+              </p>
+            )}
+            {role === "admin" && (
+              <p className="text-sm text-green-200">
+                👑 Visualizando todos os leads da empresa
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-4">
           <div className="hidden sm:flex items-center space-x-2">
@@ -335,6 +362,11 @@ export default function LeadsPage() {
                       <p className="text-xs text-gray-500">
                         {lead.phoneNumber}
                       </p>
+                      <LeadAttendantInfo
+                        assignedTo={lead.assignedTo}
+                        attendantName={lead.assignedTo} // TODO: Buscar nome real do atendente
+                        isAdmin={role === "admin"}
+                      />
                     </div>
                   </div>
                   {lead.isFavorite && (

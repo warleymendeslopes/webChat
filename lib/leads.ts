@@ -396,14 +396,20 @@ export async function countLeads(
 /**
  * Calcula estatísticas de leads
  */
-export async function getLeadStats(companyId: string, days: number = 30): Promise<LeadStats> {
+export async function getLeadStats(companyId: string, days: number = 30, attendantId?: string): Promise<LeadStats> {
   const collection = await getCollection('leads');
   
   const periodStart = new Date();
   periodStart.setDate(periodStart.getDate() - days);
 
-  // Buscar todos os leads
-  const allLeads = await collection.find({ companyId, isActive: true }).toArray();
+  // 🆕 Construir query baseada no filtro de atendente
+  const query: any = { companyId, isActive: true };
+  if (attendantId) {
+    query.assignedTo = attendantId;
+  }
+
+  // Buscar leads (todos ou filtrados por atendente)
+  const allLeads = await collection.find(query).toArray();
 
   // Contar por status
   const byStatus = {

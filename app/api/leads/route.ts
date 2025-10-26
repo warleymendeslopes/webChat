@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get('companyId');
+    const userRole = searchParams.get('userRole'); // 'admin' ou 'attendant'
+    const userId = searchParams.get('userId'); // ID do usuário logado
 
     if (!companyId) {
       return NextResponse.json(
@@ -47,6 +49,11 @@ export async function GET(request: NextRequest) {
       filters.isFavorite = searchParams.get('isFavorite') === 'true';
     }
 
+    // 🆕 Filtro por atendente: se for attendant, só vê seus próprios leads
+    if (userRole === 'attendant' && userId) {
+      filters.assignedTo = userId;
+    }
+
     // Buscar leads
     const leads = await getLeadsWithFilters(companyId, filters, limit, skip);
     const total = await countLeads(companyId, filters);
@@ -60,6 +67,7 @@ export async function GET(request: NextRequest) {
       skip,
       hasMore: (skip + limit) < total,
       popularTags,
+      userRole, // Retornar role para o frontend saber como exibir
     });
   } catch (error) {
     console.error('Error fetching leads:', error);

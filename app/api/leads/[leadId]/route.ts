@@ -11,10 +11,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { leadId: string } }
+  { params }: { params: Promise<{ leadId: string }> }
 ) {
   try {
-    const { leadId } = params;
+    const { leadId } = await params;
 
     const lead = await getLeadById(leadId);
 
@@ -37,10 +37,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { leadId: string } }
+  { params }: { params: Promise<{ leadId: string }> }
 ) {
   try {
-    const { leadId } = params;
+    const { leadId } = await params;
     const body = await request.json();
 
     // Verificar se lead existe
@@ -117,10 +117,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { leadId: string } }
+  { params }: { params: Promise<{ leadId: string }> }
 ) {
   try {
-    const { leadId } = params;
+    const { leadId } = await params;
 
     // Desativar ao invés de deletar
     await updateLead(leadId, { isActive: false });
