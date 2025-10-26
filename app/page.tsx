@@ -5,25 +5,23 @@ import ChatList from "@/components/ChatList";
 import ChatWindow from "@/components/ChatWindow";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import SafeRedirect from "@/components/SafeRedirect";
-import { useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useAuthState } from "@/hooks/useAuthState";
 import { auth } from "@/lib/firebase";
 import { clearUnread, getChatRecipientPhone } from "@/lib/firestore";
 import { signOut } from "firebase/auth";
-import { LogOut, Menu, MessageCircle, Settings, X } from "lucide-react";
+import { LogOut, Menu, MessageCircle, Settings, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function Home() {
   const router = useRouter();
-  const { user, loading: authLoading, firestoreUserId } = useAuth();
-  const { role, companyId, loading: roleLoading } = useUserRole(user);
+  const { user, firestoreUserId, roleData, loading } = useAuthState();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [recipientPhone, setRecipientPhone] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const loading = authLoading || roleLoading;
+  const { role, companyId } = roleData;
 
   // Evitar renderização desnecessária
   const shouldRender =
@@ -41,8 +39,6 @@ export default function Home() {
     firestoreUserId: !!firestoreUserId,
     role,
     companyId,
-    authLoading,
-    roleLoading,
   });
 
   const handleLogout = async () => {
@@ -75,7 +71,7 @@ export default function Home() {
     return <SafeRedirect to="/login" condition={true} loading={loading} />;
   }
 
-  if (user && role === null && !roleLoading) {
+  if (user && role === null && !loading) {
     return <SafeRedirect to="/login" condition={true} loading={loading} />;
   }
 
@@ -108,6 +104,14 @@ export default function Home() {
           <h1 className="text-xl font-semibold">WhatsApp Chat</h1>
         </div>
         <div className="flex items-center space-x-4">
+          <Link
+            href="/leads"
+            className="hidden sm:flex items-center space-x-2 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors"
+          >
+            <Users size={20} />
+            <span className="text-sm">Leads</span>
+          </Link>
+
           {role === "admin" && (
             <Link
               href="/admin"

@@ -4,6 +4,7 @@ import { playNotificationSound } from "@/lib/audioUtils";
 import { subscribeToChats } from "@/lib/firestore";
 import { Chat } from "@/types";
 import { ChatAssignment } from "@/types/admin";
+import { Lead } from "@/types/leads";
 import { format } from "date-fns";
 import { MessageCircle, User, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +29,7 @@ export default function ChatList({
   const [assignments, setAssignments] = useState<
     Record<string, ChatAssignment>
   >({});
+  const [leadsData, setLeadsData] = useState<Record<string, Lead>>({});
   const prevUnreadRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -69,41 +71,52 @@ export default function ChatList({
     return () => unsubscribe();
   }, [userId, companyId]);
 
-  // 🆕 NOVO: Buscar atribuições dos chats
+  // 🆕 NOVO: Buscar atribuições e leads dos chats
   useEffect(() => {
-    const fetchAssignments = async () => {
+    const fetchData = async () => {
       if (chats.length === 0) return;
 
       try {
         const assignmentsMap: Record<string, ChatAssignment> = {};
+        const leadsMap: Record<string, Lead> = {};
 
-        // Buscar atribuição de cada chat
-        for (const chat of chats) {
-          try {
-            const response = await fetch(
-              `/api/chat-assignments?chatId=${chat.id}`
-            );
-            if (response.ok) {
-              const data = await response.json();
-              if (data.assignment) {
-                assignmentsMap[chat.id] = data.assignment;
+        // Buscar atribuição e lead de cada chat em paralelo
+        await Promise.all(
+          chats.map(async (chat) => {
+            try {
+              // Buscar assignment
+              const assignmentResponse = await fetch(
+                `/api/chat-assignments?chatId=${chat.id}`
+              );
+              if (assignmentResponse.ok) {
+                const assignmentData = await assignmentResponse.json();
+                if (assignmentData.assignment) {
+                  assignmentsMap[chat.id] = assignmentData.assignment;
+                }
               }
+
+              // Buscar lead
+              const leadResponse = await fetch(`/api/leads/by-chat/${chat.id}`);
+              if (leadResponse.ok) {
+                const leadData = await leadResponse.json();
+                if (leadData.lead) {
+                  leadsMap[chat.id] = leadData.lead;
+                }
+              }
+            } catch (error) {
+              console.error(`Failed to fetch data for chat ${chat.id}:`, error);
             }
-          } catch (error) {
-            console.error(
-              `Failed to fetch assignment for chat ${chat.id}:`,
-              error
-            );
-          }
-        }
+          })
+        );
 
         setAssignments(assignmentsMap);
+        setLeadsData(leadsMap);
       } catch (error) {
-        console.error("Error fetching assignments:", error);
+        console.error("Error fetching assignments and leads:", error);
       }
     };
 
-    fetchAssignments();
+    fetchData();
   }, [chats]);
 
   if (loading) {
@@ -127,10 +140,23 @@ export default function ChatList({
     <div className="overflow-y-auto h-full">
       {chats.map((chat) => {
         const assignment = assignments[chat.id];
+        const lead = leadsData[chat.id];
         const isAssignedToMe = assignment?.assignedTo === userId;
         const isUnassigned = !assignment?.assignedTo;
         const isAssignedToOther =
           assignment?.assignedTo && assignment.assignedTo !== userId;
+
+        // Cor da borda baseada no status do lead (prioridade maior)
+        const getBorderColor = () => {
+          if (lead?.status === "won") return "border-l-4 border-green-600";
+          if (lead?.status === "negotiating")
+            return "border-l-4 border-purple-500";
+          if (lead?.status === "qualified")
+            return "border-l-4 border-green-400";
+          if (isAssignedToMe) return "border-l-4 border-green-500";
+          if (isUnassigned) return "border-l-4 border-amber-400";
+          return "";
+        };
 
         return (
           <div
@@ -138,9 +164,7 @@ export default function ChatList({
             onClick={() => onSelectChat(chat.id)}
             className={`flex items-center p-4 cursor-pointer hover:bg-gray-100 transition-colors ${
               selectedChatId === chat.id ? "bg-gray-200" : ""
-            } ${isAssignedToMe ? "border-l-4 border-green-500" : ""} ${
-              isUnassigned ? "border-l-4 border-amber-400" : ""
-            }`}
+            } ${getBorderColor()}`}
           >
             <div className="relative mr-3">
               <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center">
@@ -180,6 +204,27 @@ export default function ChatList({
                       Outro
                     </span>
                   )}
+                  {/* Badge de status do lead */}
+                  {lead && (
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${
+                        lead.status === "won"
+                          ? "bg-green-600 text-white font-semibold"
+                          : lead.status === "negotiating"
+                          ? "bg-purple-100 text-purple-700"
+                          : lead.status === "qualified"
+                          ? "bg-green-100 text-green-700"
+                          : lead.status === "lost"
+                          ? "bg-red-100 text-red-700"
+                          : ""
+                      }`}
+                    >
+                      {lead.status === "won" && "🎉"}
+                      {lead.status === "negotiating" && "💰"}
+                      {lead.status === "qualified" && "✅"}
+                      {lead.status === "lost" && "❌"}
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-gray-500 ml-2">
                   {format(chat.lastMessageTimestamp, "HH:mm")}
@@ -188,6 +233,12 @@ export default function ChatList({
               {chat.lastMessage && (
                 <p className="text-sm text-gray-600 truncate">
                   {chat.lastMessage.text || "Mídia"}
+                </p>
+              )}
+              {/* Mostrar valor se venda fechada */}
+              {lead?.closedValue && (
+                <p className="text-xs text-green-600 font-semibold mt-1">
+                  💰 R$ {lead.closedValue.toLocaleString("pt-BR")}
                 </p>
               )}
             </div>

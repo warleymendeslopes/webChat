@@ -1,5 +1,6 @@
 import { updateChatActivity } from '@/lib/chatDistribution';
 import { sendMessage, updateMessageStatus } from '@/lib/firestore';
+import { updateLeadInteraction } from '@/lib/leads';
 import { sendWhatsAppMedia, sendWhatsAppMessage } from '@/lib/whatsapp';
 import { getWhatsAppConfig } from '@/lib/whatsappConfig';
 import { NextRequest, NextResponse } from 'next/server';
@@ -72,6 +73,14 @@ export async function POST(request: NextRequest) {
       await updateChatActivity(chatId, false);
     } catch (activityError) {
       console.error('⚠️ Failed to update chat activity:', activityError);
+      // Não bloqueia o envio da mensagem
+    }
+
+    // 🆕 NOVO: Atualizar interação do lead
+    try {
+      await updateLeadInteraction(chatId, false);
+    } catch (leadError) {
+      console.error('⚠️ Failed to update lead interaction:', leadError);
       // Não bloqueia o envio da mensagem
     }
 

@@ -2,6 +2,7 @@ import { writeAiLog } from '@/lib/aiLog';
 import { generateSeniorSalesReply } from '@/lib/aiResponder';
 import { distributeChat, getOrCreateChatAssignment, updateChatActivity } from '@/lib/chatDistribution';
 import { createUser, getMessagesSince, getOrCreateAttendant, getOrCreateChat, getUserByPhoneNumber, incrementUnread, sendMessage, setChatAiControl } from '@/lib/firestore';
+import { getOrCreateLead, updateLeadInteraction } from '@/lib/leads';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { getAiConfig, getCompanyByPhoneNumberId } from '@/lib/whatsappConfig';
 import { WhatsAppMessage } from '@/types';
@@ -122,19 +123,47 @@ async function handleIncomingMessage(message: any, metadata: any) {
   );
 
   // 🆕 NOVO: Distribuir automaticamente se ainda não atribuído
+  let assignedAttendant: string | undefined;
   if (!assignment.assignedTo) {
     console.log(`📋 New chat detected, attempting automatic distribution...`);
-    const assignedAttendant = await distributeChat(chatId, companyMapping.companyId);
+    const attendant = await distributeChat(chatId, companyMapping.companyId);
     
-    if (assignedAttendant) {
-      console.log(`✅ Chat ${chatId} auto-assigned to attendant ${assignedAttendant}`);
+    if (attendant) {
+      assignedAttendant = attendant;
+      console.log(`✅ Chat ${chatId} auto-assigned to attendant ${attendant}`);
     } else {
       console.warn(`⚠️ No available attendant for chat ${chatId}`);
     }
+  } else {
+    assignedAttendant = assignment.assignedTo;
+  }
+
+  // 🆕 NOVO: Criar ou buscar lead (CRM)
+  try {
+    const contactName = metadata.contacts?.[0]?.profile?.name || user.name || phoneNumber;
+    await getOrCreateLead(
+      chatId,
+      user.id,
+      phoneNumber,
+      contactName,
+      companyMapping.companyId,
+      assignedAttendant
+    );
+    console.log(`📊 Lead created/updated for ${phoneNumber}`);
+  } catch (leadError) {
+    console.error('⚠️ Failed to create/update lead:', leadError);
+    // Não bloqueia o fluxo de mensagem
   }
 
   // 🆕 NOVO: Atualizar atividade do chat (registrar mensagem do cliente)
   await updateChatActivity(chatId, true);
+  
+  // 🆕 NOVO: Atualizar interação do lead
+  try {
+    await updateLeadInteraction(chatId, true);
+  } catch (interactionError) {
+    console.error('⚠️ Failed to update lead interaction:', interactionError);
+  }
 
   // Save message to Firestore
   const messageId = await sendMessage({

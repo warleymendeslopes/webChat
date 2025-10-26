@@ -7,8 +7,10 @@ import {
   subscribeToMessages,
 } from "@/lib/firestore";
 import { Message } from "@/types";
-import { ArrowLeft, MoreVertical, Phone, Video } from "lucide-react";
+import { Lead } from "@/types/leads";
+import { ArrowLeft, MoreVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import LeadQuickActions from "./LeadQuickActions";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
 
@@ -32,6 +34,7 @@ export default function ChatWindow({
   const [aiControl, setAiControl] = useState<boolean>(false);
   const [windowExpired, setWindowExpired] = useState<boolean>(false);
   const [checkingWindow, setCheckingWindow] = useState<boolean>(true);
+  const [leadData, setLeadData] = useState<Lead | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef<number>(0);
 
@@ -72,6 +75,23 @@ export default function ChatWindow({
     const interval = setInterval(checkWindow, 60000);
 
     return () => clearInterval(interval);
+  }, [chatId]);
+
+  // 🆕 NOVO: Buscar dados do lead
+  useEffect(() => {
+    const fetchLead = async () => {
+      try {
+        const response = await fetch(`/api/leads/by-chat/${chatId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setLeadData(data.lead);
+        }
+      } catch (error) {
+        console.error("Error fetching lead:", error);
+      }
+    };
+
+    fetchLead();
   }, [chatId]);
 
   useEffect(() => {
@@ -137,12 +157,13 @@ export default function ChatWindow({
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <button className="text-gray-600 hover:text-gray-900">
-              <Video size={22} />
-            </button>
-            <button className="text-gray-600 hover:text-gray-900">
-              <Phone size={22} />
-            </button>
+            {/* Lead Quick Actions */}
+            <LeadQuickActions
+              chatId={chatId}
+              leadData={leadData}
+              onLeadUpdate={(updatedLead) => setLeadData(updatedLead)}
+            />
+
             {aiControl && (
               <button
                 onClick={handleDisableAi}
