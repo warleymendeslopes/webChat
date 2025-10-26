@@ -43,6 +43,7 @@ export default function MetricsDashboard({ companyId }: MetricsDashboardProps) {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isReassigning, setIsReassigning] = useState(false);
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -73,6 +74,52 @@ export default function MetricsDashboard({ companyId }: MetricsDashboardProps) {
 
     return () => clearInterval(interval);
   }, [companyId]);
+
+  // Função para executar redistribuição manual
+  const handleManualReassignment = async () => {
+    if (
+      !confirm(
+        "Deseja redistribuir chats inativos e atualizar status dos atendentes?"
+      )
+    ) {
+      return;
+    }
+
+    setIsReassigning(true);
+    try {
+      const response = await fetch("/api/cron/reassign-chats", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Falha ao executar redistribuição");
+      }
+
+      const data = await response.json();
+
+      alert(
+        `✅ Redistribuição concluída!\n\n` +
+          `📊 Empresas processadas: ${data.results.companies}\n` +
+          `⏰ Chats expirados: ${data.results.expiredChats}\n` +
+          `🔄 Chats redistribuídos: ${data.results.reassignedChats}\n` +
+          `🔴 Atendentes offline: ${data.results.offlineAttendants}`
+      );
+
+      // Recarregar métricas
+      const metricsResponse = await fetch(
+        `/api/admin/metrics?companyId=${companyId}`
+      );
+      if (metricsResponse.ok) {
+        const metricsData = await metricsResponse.json();
+        setMetrics(metricsData.metrics);
+      }
+    } catch (err) {
+      console.error("Error during reassignment:", err);
+      alert("❌ Erro ao executar redistribuição. Verifique o console.");
+    } finally {
+      setIsReassigning(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -138,6 +185,47 @@ export default function MetricsDashboard({ companyId }: MetricsDashboardProps) {
 
   return (
     <div className="space-y-6">
+      {/* Ações Administrativas */}
+      <div className="bg-white rounded-lg shadow p-4 border border-gray-200 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">
+            Redistribuição Manual
+          </h3>
+          <p className="text-xs text-gray-600">
+            Redistribui chats inativos e atualiza status dos atendentes
+          </p>
+        </div>
+        <button
+          onClick={handleManualReassignment}
+          disabled={isReassigning}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+        >
+          {isReassigning ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <span>Processando...</span>
+            </>
+          ) : (
+            <>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span>Redistribuir Chats</span>
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Métricas Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard

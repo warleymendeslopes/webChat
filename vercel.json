@@ -1,9 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/reassign-chats",
-      "schedule": "*/30 * * * *"
-    }
-  ]
-}
-
